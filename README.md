@@ -48,6 +48,19 @@ their minutes (`formatShareMessage` in `src/core/format.ts`).
 - iOS / Android: the image goes through the system share sheet (pick WhatsApp). Share the text
   as a second step, since WhatsApp does not reliably accept a picture and a caption in one share.
 
+## Deploying the web app (Vercel)
+
+`vercel.json` is set up for a static deploy: it builds with `npx expo export --platform web`,
+serves `dist/`, and rewrites unknown paths to `index.html` so refreshing `/plan` works.
+
+1. In Vercel choose **Add New > Project** and import this GitHub repository (free Hobby plan).
+2. Keep the detected settings (they come from `vercel.json`) and deploy.
+3. Every push gets a preview URL; the default branch becomes the production URL.
+
+Or from a terminal: `npx vercel` (preview) / `npx vercel --prod`.
+
+Squad data is stored in the browser's local storage, so each browser starts with an empty squad.
+
 ## Status
 
 | Milestone | State |

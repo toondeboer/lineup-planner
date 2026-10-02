@@ -45,8 +45,8 @@ starts in goal.
 | M2 Slot assignment and full plan generation | done |
 | M3 Manual overrides and recalculation | done |
 | M4 Squad and match setup screens | done |
-| M5 Plan screen | next |
-| M6 WhatsApp sharing | |
+| M5 Plan screen | done |
+| M6 WhatsApp sharing | next |
 | M7 Polish | |
 
 ## Development

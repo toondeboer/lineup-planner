@@ -1,4 +1,5 @@
 import { View } from 'react-native';
+import type { RefObject } from 'react';
 import Svg, { Circle, G, Line, Rect, Text as SvgText } from 'react-native-svg';
 import type { Formation } from '../core';
 import { colors } from './theme';
@@ -27,17 +28,19 @@ export function Pitch({
   selectedSlot,
   onSlotPress,
   title,
+  svgRef,
 }: {
   formation: Formation;
   markers: Record<string, PitchMarker | undefined>;
   selectedSlot?: string;
   onSlotPress?: (slotId: string) => void;
   title?: string;
+  svgRef?: RefObject<Svg | null>;
 }) {
   const line = colors.pitchLine;
   return (
     <View style={{ width: '100%', aspectRatio: PITCH_WIDTH / PITCH_HEIGHT }}>
-      <Svg width="100%" height="100%" viewBox={`0 0 ${PITCH_WIDTH} ${PITCH_HEIGHT}`}>
+      <Svg ref={svgRef} width="100%" height="100%" viewBox={`0 0 ${PITCH_WIDTH} ${PITCH_HEIGHT}`}>
         <Rect x={0} y={0} width={PITCH_WIDTH} height={PITCH_HEIGHT} fill={colors.pitch} rx={2} />
         <Rect x={3} y={3} width={94} height={124} fill="none" stroke={line} strokeWidth={0.5} />
         <Line x1={3} y1={65} x2={97} y2={65} stroke={line} strokeWidth={0.5} />
@@ -45,7 +48,7 @@ export function Pitch({
         <Rect x={27} y={3} width={46} height={18} fill="none" stroke={line} strokeWidth={0.5} />
         <Rect x={27} y={105} width={46} height={22} fill="none" stroke={line} strokeWidth={0.5} />
         {title ? (
-          <SvgText x={50} y={9} fontSize={4} fontWeight="bold" fill="#fff" textAnchor="middle">
+          <SvgText fontFamily="Arial, Helvetica, sans-serif" x={50} y={9} fontSize={4} fontWeight="bold" fill="#fff" textAnchor="middle">
             {title}
           </SvgText>
         ) : null}
@@ -64,14 +67,14 @@ export function Pitch({
                 stroke={selected ? '#ffeb3b' : marker?.pinned ? '#fff' : '#00000055'}
                 strokeWidth={selected ? 1.2 : marker?.pinned ? 0.9 : 0.4}
               />
-              <SvgText x={cx} y={cy + 1.4} fontSize={3.4} fontWeight="bold" fill="#fff" textAnchor="middle">
+              <SvgText fontFamily="Arial, Helvetica, sans-serif" x={cx} y={cy + 1.4} fontSize={3.4} fontWeight="bold" fill="#fff" textAnchor="middle">
                 {slot.role}
               </SvgText>
-              <SvgText x={cx} y={cy + 9} fontSize={3.6} fontWeight="bold" fill="#fff" textAnchor="middle">
+              <SvgText fontFamily="Arial, Helvetica, sans-serif" x={cx} y={cy + 9} fontSize={3.6} fontWeight="bold" fill="#fff" textAnchor="middle">
                 {marker ? shortName(marker.name) : '—'}
               </SvgText>
               {marker?.note ? (
-                <SvgText x={cx} y={cy + 12.6} fontSize={2.8} fill="#ffffffcc" textAnchor="middle">
+                <SvgText fontFamily="Arial, Helvetica, sans-serif" x={cx} y={cy + 12.6} fontSize={2.8} fill="#ffffffcc" textAnchor="middle">
                   {marker.note}
                 </SvgText>
               ) : null}

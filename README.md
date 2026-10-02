@@ -36,6 +36,18 @@ substitution minutes are then recalculated around them: the players you leave ou
 starting XI become the substitutes, one per group. Pinning a slot to a keeper chooses who
 starts in goal.
 
+## Sharing
+
+The Plan tab has a **Share lineup** button. The share screen renders the starting XI as a PNG
+(via `react-native-svg`'s `toDataURL`) and builds a WhatsApp message with the substitutions and
+their minutes (`formatShareMessage` in `src/core/format.ts`).
+
+- Web on a phone: image and text are shared together through the Web Share API when the browser
+  supports sharing files. On desktop the PNG is downloaded and the text can be copied or opened
+  in WhatsApp via a `wa.me` link.
+- iOS / Android: the image goes through the system share sheet (pick WhatsApp). Share the text
+  as a second step, since WhatsApp does not reliably accept a picture and a caption in one share.
+
 ## Status
 
 | Milestone | State |
@@ -46,8 +58,8 @@ starts in goal.
 | M3 Manual overrides and recalculation | done |
 | M4 Squad and match setup screens | done |
 | M5 Plan screen | done |
-| M6 WhatsApp sharing | next |
-| M7 Polish | |
+| M6 WhatsApp sharing | done (device test pending) |
+| M7 Polish, e2e test, device test | next |
 
 ## Development
 

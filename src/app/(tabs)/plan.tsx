@@ -1,3 +1,4 @@
+import { router } from 'expo-router';
 import { useState } from 'react';
 import { Text, View } from 'react-native';
 import { substitutionLines } from '../../core';
@@ -89,6 +90,7 @@ export default function PlanScreen() {
           </Row>
         </Card>
       )}
+      <Button label="Share lineup" onPress={() => router.push('/share')} />
       {hasPins && <Button label="Reset to automatic lineup" kind="secondary" onPress={() => { clearPins(); setSelected(undefined); }} />}
 
       {plan.warnings.length > 0 && (

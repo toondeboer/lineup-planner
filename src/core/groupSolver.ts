@@ -25,7 +25,7 @@ export interface SolveOptions {
 export const MAX_SOLVABLE_GROUP = 7;
 
 /** Cost added for each broken pin. Large enough to dominate every rating cost. */
-export const PIN_VIOLATION = 1e6;
+export const PIN_VIOLATION = 1e14;
 
 /** Kick-off pins: players who must start in a given slot. */
 export interface Pins {
@@ -48,8 +48,8 @@ function violates(pins: Pins | undefined, player: Player, slot: Slot): boolean {
   return (wantedSlot !== undefined && wantedSlot !== slot.id) || (wantedPlayer !== undefined && wantedPlayer !== player.id);
 }
 
-/** Weight of keeping a group's slots close together, per match minute. */
-const COHESION_PER_MINUTE = 0.1;
+/** Weight of keeping a group's slots close together, per match minute. Only breaks ties. */
+const COHESION_PER_MINUTE = 0.0001;
 
 /**
  * Finds the best way to rotate `members` over `slots` for a group with one bench place.
@@ -85,7 +85,7 @@ export function solveGroup(
       assignments: [{ [members[0].id]: slots[0] }],
     };
   }
-  const solution = options.strict
+  const solution = options.strict || g > MAX_FLEXIBLE_GROUP
     ? solveStrict(members, slots, segments, pins, pen)
     : solveFlexible(members, slots, segments, pins, pen);
   return { ...solution, cost: solution.cost + cohesionCost(slots, matchMinutes) };
@@ -193,14 +193,17 @@ export function cohesionCost(slots: Slot[], matchMinutes: number): number {
   return COHESION_PER_MINUTE * matchMinutes * total;
 }
 
-/** Cost of each teammate who has to change position at a substitution (keeps swaps simple). */
-const MOVE_PENALTY = 20;
+/**
+ * Cost of each teammate who has to change position at a substitution. Above everything at "OK" or
+ * better (a whole match of those is at most 990), below a single minute at "emergency".
+ */
+const MOVE_PENALTY = 1000;
 
-/** How many equally good arrangements are kept per sitter when looking for the fewest position changes. */
-const MAX_ARRANGEMENTS = 12;
-
-/** Largest group whose sit-out orders are all tried; bigger groups use one sensible order. */
+/** Largest group whose sit-out orders are all tried; bigger groups use a few sensible orders. */
 const MAX_ORDER_SEARCH = 4;
+
+/** Groups larger than this only make like-for-like swaps (the search space grows too fast). */
+const MAX_FLEXIBLE_GROUP = 5;
 
 function permutations(n: number): number[][] {
   const out: number[][] = [];
@@ -213,9 +216,10 @@ function permutations(n: number): number[][] {
 }
 
 /**
- * Teammates may change position at a substitution. For each possible sitter we find the best way to
- * spread the other members over the group's slots (an assignment problem, tiny at this size). Then we
- * pick the sit-out order and, among equally good arrangements, the ones needing the fewest moves.
+ * Teammates may change position at a substitution, but only when that is worth it. For every
+ * possible sitter we price every way of spreading the other members over the group's slots, then
+ * choose the sit-out order and arrangements with the lowest total cost, where a position change
+ * costs `MOVE_PENALTY`.
  */
 function solveFlexible(
   members: Player[],
@@ -229,40 +233,31 @@ function solveFlexible(
   const perms = permutations(p);
 
   interface Arrangement {
+    cost: number;
     /** slotIndexOf[member] = slot index, or -1 for the sitter. */
     slotIndexOf: Int8Array;
   }
-  interface Options {
-    cost: number;
-    arrangements: Arrangement[];
-  }
 
-  const build = (sitter: number, withPins: boolean): Options => {
+  const build = (sitter: number, withPins: boolean): Arrangement[] => {
     const others = members.map((_, i) => i).filter((i) => i !== sitter);
-    let best = Infinity;
-    let arrangements: Arrangement[] = [];
-    for (const perm of perms) {
+    return perms.map((perm) => {
       let cost = withPins && pins?.byPlayer.has(members[sitter].id) ? PIN_VIOLATION : 0;
+      const slotIndexOf = new Int8Array(g).fill(-1);
       for (let i = 0; i < p; i++) {
         const member = others[i];
         cost += pen[member][perm[i]];
         if (withPins && violates(pins, members[member], slots[perm[i]])) cost += PIN_VIOLATION;
+        slotIndexOf[member] = perm[i];
       }
-      if (cost < best - 1e-9) {
-        best = cost;
-        arrangements = [];
-      }
-      if (cost <= best + 1e-9 && arrangements.length < MAX_ARRANGEMENTS) {
-        const slotIndexOf = new Int8Array(g).fill(-1);
-        for (let i = 0; i < p; i++) slotIndexOf[others[i]] = perm[i];
-        arrangements.push({ slotIndexOf });
-      }
-    }
-    return { cost: best, arrangements };
+      return { cost, slotIndexOf };
+    });
   };
 
   const later = members.map((_, m) => build(m, false));
   const first = members.map((_, m) => build(m, true));
+  const minCost = (list: Arrangement[]) => list.reduce((a, b) => Math.min(a, b.cost), Infinity);
+  const laterMin = later.map(minCost);
+  const firstMin = first.map(minCost);
 
   const moves = (a: Arrangement, b: Arrangement): number => {
     let count = 0;
@@ -274,44 +269,46 @@ function solveFlexible(
     return count;
   };
 
-  const byLaterCost = (a: number, b: number) => later[b].cost - later[a].cost || a - b;
+  const byLaterCost = (a: number, b: number) => laterMin[b] - laterMin[a] || a - b;
   let orders: number[][];
   if (g <= MAX_ORDER_SEARCH) {
     orders = permutations(g);
   } else {
     // One sensible order per possible first sitter (pins decide who may start on the bench).
-    const cheapest = Math.min(...first.map((o) => o.cost));
+    const cheapest = Math.min(...firstMin);
     orders = members
       .map((_, i) => i)
-      .filter((i) => first[i].cost <= cheapest + 1e-9)
+      .filter((i) => firstMin[i] <= cheapest)
       .map((i) => [i, ...members.map((_, j) => j).filter((j) => j !== i).sort(byLaterCost)]);
   }
 
   let best: { cost: number; order: number[]; picks: Arrangement[] } | undefined;
   for (const order of orders) {
-    let cost = segments[0] * first[order[0]].cost;
-    for (let k = 1; k < g; k++) cost += segments[k] * later[order[k]].cost;
-    if (best && cost >= best.cost - 1e-9) continue; // position changes only add cost
+    let lowerBound = segments[0] * firstMin[order[0]];
+    for (let k = 1; k < g; k++) lowerBound += segments[k] * laterMin[order[k]];
+    if (best && lowerBound >= best.cost) continue; // position changes only add cost
 
-    // cheapest way through the equally good arrangements, minimising position changes
-    let layer = first[order[0]].arrangements.map((arrangement) => ({ total: 0, picks: [arrangement] }));
+    // cheapest path through the segments: rating cost per segment plus a price for each position change
+    let layer = first[order[0]].map((arrangement) => ({
+      total: segments[0] * arrangement.cost,
+      picks: [arrangement],
+    }));
     for (let k = 1; k < g; k++) {
-      layer = later[order[k]].arrangements.map((arrangement) => {
+      layer = later[order[k]].map((arrangement) => {
         let pick = layer[0];
-        let pickMoves = Infinity;
+        let pickCost = Infinity;
         for (const prev of layer) {
-          const m = prev.total + moves(prev.picks[k - 1], arrangement);
-          if (m < pickMoves) {
-            pickMoves = m;
+          const c = prev.total + MOVE_PENALTY * moves(prev.picks[k - 1], arrangement);
+          if (c < pickCost) {
+            pickCost = c;
             pick = prev;
           }
         }
-        return { total: pickMoves, picks: [...pick.picks, arrangement] };
+        return { total: pickCost + segments[k] * arrangement.cost, picks: [...pick.picks, arrangement] };
       });
     }
     const end = layer.reduce((a, b) => (b.total < a.total ? b : a));
-    const total = cost + MOVE_PENALTY * end.total;
-    if (!best || total < best.cost - 1e-9) best = { cost: total, order, picks: end.picks };
+    if (!best || end.total < best.cost) best = { cost: end.total, order, picks: end.picks };
   }
 
   const chosen = best!;

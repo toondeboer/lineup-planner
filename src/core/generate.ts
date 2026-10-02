@@ -88,22 +88,28 @@ export function generatePlan(input: PlanInput): Plan {
   const goalkeepers = planGoalkeepers(goalkeeperIds, matchMinutes);
   const outfield = players.filter((p) => !goalkeeperIds.includes(p.id));
 
-  // Playing time stays between a half and three quarters of the match (groups of 2 to 4, nobody
-  // full-time) whenever the squad size allows it, but every such split is tried because some of them
-  // avoid putting someone in a position they cannot play. Small squads use the fairest few splits.
+  // Equal playing time comes first: only the fairest split of the squad into rotation groups is used
+  // (equally fair splits are all tried). Positions are optimised within that.
   const sizings = candidateSizings(outfield.length, { maxGroupSize });
-  const standard = sizings.filter((s) => s.fullTime === 0 && Math.max(0, ...s.groupSizes) <= 4);
-  const candidates = (standard.length > 0 ? standard : sizings.slice(0, 3)).slice(0, MAX_CANDIDATES);
+  const fairest = fairnessCost(sizings[0], matchMinutes);
+  const candidates = sizings
+    .filter((s) => fairnessCost(s, matchMinutes) <= fairest + 1e-6)
+    .slice(0, MAX_CANDIDATES);
   const pins = Object.keys(pinnedOutfield).length > 0 ? makePins(pinnedOutfield) : undefined;
   let best: { solved: Solved[]; total: number } | undefined;
   for (const sizing of candidates) {
     const memberCounts = [...sizing.groupSizes, ...Array<number>(sizing.fullTime).fill(1)];
-    const result = optimise(outfield, outfieldSlots, memberCounts, matchMinutes, {
-      pins,
-      strict: input.strictSwaps ?? false,
-      seed: input.seed,
-      restarts: candidates.length > 1 ? 10 : 24,
-    });
+    const strict = input.strictSwaps ?? false;
+    const options = { pins, seed: input.seed, restarts: candidates.length > 1 ? 10 : 24 };
+    let result = optimise(outfield, outfieldSlots, memberCounts, matchMinutes, { ...options, strict: true });
+    if (!strict) {
+      // Start the search that allows position changes from the like-for-like plan, so it is never worse.
+      result = optimise(outfield, outfieldSlots, memberCounts, matchMinutes, {
+        ...options,
+        strict: false,
+        initial: result.solved.map((r) => r.state),
+      });
+    }
     const total = result.cost + fairnessCost(sizing, matchMinutes);
     if (!best || total < best.total - 1e-9) best = { solved: result.solved, total };
   }
@@ -133,7 +139,13 @@ function optimise(
   slots: Slot[],
   memberCounts: number[],
   matchMinutes: number,
-  { pins, strict, seed, restarts: baseRestarts }: { pins?: Pins; strict: boolean; seed?: number; restarts: number },
+  {
+    pins,
+    strict,
+    seed,
+    restarts: baseRestarts,
+    initial,
+  }: { pins?: Pins; strict: boolean; seed?: number; restarts: number; initial?: GroupState[] },
 ): { solved: Solved[]; cost: number } {
   const cache = new Map<string, GroupSolution>();
   const jitter = seed === undefined ? undefined : (playerId: string, slotId: string) => JITTER * hash01(seed, playerId, slotId);
@@ -165,7 +177,12 @@ function optimise(
     );
     const states: GroupState[] = [];
     let si = 0;
-    for (const count of memberCounts) {
+    // the first start can be a known good arrangement (e.g. the like-for-like plan)
+    if (r === 0 && initial) {
+      states.push(...initial.map((g) => ({ slots: [...g.slots], members: [...g.members] })));
+      si = slots.length;
+    }
+    for (const count of r === 0 && initial ? [] : memberCounts) {
       const slotCount = count === 1 ? 1 : count - 1;
       const groupSlots = slotPool.slice(si, si + slotCount);
       si += slotCount;
@@ -269,8 +286,8 @@ function segmentLengths(groupSize: number, matchMinutes: number): number[] {
   return bounds.slice(1).map((end, i) => end - bounds[i]);
 }
 
-/** Per-minute noise added to ratings when a seed is given; far below the gap between rating levels. */
-const JITTER = 0.9;
+/** Per-minute noise added when a seed is given. A whole match of it stays below one minute at "OK". */
+const JITTER = 0.0004;
 
 function hash01(seed: number, a: string, b: string): number {
   let h = 2166136261 ^ seed;

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { FORMATIONS, getFormation } from './formations';
 import { generatePlan, chooseGoalkeepers } from './generate';
 import { rating } from './fit';
+import { planGroupSizes } from './groups';
 import { lineupAt } from './plan';
 import { ROLES, type Player, type Rating, type Role } from './types';
 
@@ -71,9 +72,9 @@ describe('generatePlan invariants', () => {
     const sizes = plan.groups.map((g) => g.memberIds.length);
     expect(sizes.reduce((a, g) => a + (g === 1 ? 1 : g - 1), 0)).toBe(10);
     expect(plan.groups.filter((g) => g.memberIds.length > 1)).toHaveLength(n - 10);
-    // playing time stays between a half and 5/6 of the match unless the squad is tiny
-    if (n >= 14) expect(Math.max(...sizes)).toBeLessThanOrEqual(4);
-    if (n >= 14) expect(Math.min(...sizes)).toBeGreaterThanOrEqual(2);
+    // playing time is split as evenly as possible, whatever the ratings are
+    const fairest = planGroupSizes(n);
+    expect([...sizes].sort()).toEqual([...fairest.groupSizes, ...Array(fairest.fullTime).fill(1)].sort());
   });
 
   it('is deterministic', () => {

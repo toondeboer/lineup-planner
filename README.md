@@ -17,25 +17,26 @@ occasional guests. Targets web, iOS and Android from one Expo (TypeScript) codeb
 
 ## How positions are assigned
 
-Players carry a rating per position: 3 preferred, 2 OK, 1 emergency, 0 not suited. The planner
-(`generatePlan` in `src/core/generate.ts`) minimises, in this order of importance:
+Players carry a rating per position: 3 preferred, 2 OK, 1 emergency, 0 "no". The planner
+(`generatePlan` in `src/core/generate.ts`) works through these priorities, strictly in this order, so a
+lower one can never override a higher one:
 
-1. minutes at a position rated 0 (1000 per minute),
-2. minutes at a position rated 1 (100 per minute),
-3. minutes at a position rated 2 (8 per minute), so 3 is preferred over 2,
-4. uneven playing time and teammates having to shift position, as tie-breakers.
+1. **Equal playing time.** The squad is split into the fairest rotation groups (see above), with
+   substitutions only at the fixed windows (15', 22', 30', 45', 60', 67', 75' ...).
+2. **Fewest minutes at a position rated "no".**
+3. **Fewest minutes at "emergency", then at "OK"**, so a 3 is preferred over a 2.
+4. **Position shifts.** A teammate may change position at a substitution when that removes a "no" or an
+   "emergency" position, but not just to upgrade a 2 to a 3. Turn shifts off with "Like-for-like only" on
+   the Match tab. (Groups of 6, which only happen with 11 or 12 outfield players, always swap like-for-like.)
 
-It tries every way of splitting the squad into groups that keeps everyone between a half and three
-quarters of the match (2 to 4 players per group, nobody full-time) and keeps the best plan. Within a
-group, teammates may change position at a substitution when that keeps everyone in a position they
-can play (turn this off with "Like-for-like only" on the Match tab). The search is deterministic.
+Ties are broken by keeping a group's positions close together on the pitch. The search is deterministic.
 
-**Recalculate** gives a different plan of the same quality: it adds a small seeded random nudge that
-can only choose between equally good options, never worse ones. Pinned starters are kept.
+**Recalculate** gives a different plan of the same quality: it adds a tiny seeded nudge that can only choose
+between plans that are equal on all of the priorities above. Pinned starters are kept.
 
-The Plan tab shows the share of player-minutes at each rating. Zeros that remain are usually a
-squad problem: a group needs a bench player who can cover its positions, so rating a player for more
-positions (or adding a versatile guest) is the way to remove them.
+The Plan tab shows the share of player-minutes at each rating. Zeros that remain are usually a squad
+problem: a group needs a bench player who can cover its positions, so rating a player for more positions
+(or adding a versatile guest) is the way to remove them.
 
 Goalkeepers: players rated 3 for GK (at most two) are the keepers; if nobody is, the best rated
 player is. Pass `goalkeeperIds` to choose explicitly.

@@ -15,7 +15,7 @@ function allRounders(outfield: number, rating: Rating = 3): Player[] {
   ];
 }
 
-function specialists(outfield: number, seed: number): Player[] {
+function specialists(outfield: number, seed: number, secondary = 0.35): Player[] {
   let a = seed;
   const rand = () => ((a = (a * 1664525 + 1013904223) >>> 0) / 2 ** 32);
   const base: Role[] = ['LB', 'CB', 'CB', 'RB', 'CM', 'CM', 'CM', 'LW', 'ST', 'RW'];
@@ -25,7 +25,7 @@ function specialists(outfield: number, seed: number): Player[] {
     { id: 'gk', name: 'gk', ratings: { GK: 3 } },
     ...roles.map((role, i) => {
       const ratings: Partial<Record<Role, Rating>> = { [role]: 3 };
-      for (const r of ROLES) if (r !== 'GK' && r !== role && rand() < 0.35) ratings[r] = 2;
+      for (const r of ROLES) if (r !== 'GK' && r !== role && rand() < secondary) ratings[r] = 2;
       return { id: `p${i}`, name: `p${i}`, ratings };
     }),
   ];
@@ -81,6 +81,38 @@ describe('position fit', () => {
         expect(new Set(Object.values(lineup)).size).toBe(11);
       }
     }
+  });
+});
+
+describe('priorities', () => {
+  it('does not move anybody when like-for-like swaps are just as good', () => {
+    const plan = generatePlan({ formation, players: allRounders(15) });
+    for (const sub of plan.substitutions) expect(sub.moves).toEqual([]);
+  });
+
+  it('shifts teammates only to avoid positions rated "no" or "emergency"', () => {
+    let found = false;
+    for (let seed = 1; seed <= 60 && !found; seed++) {
+      const players = specialists(14, seed * 13, 0.08);
+      const strict = generatePlan({ formation, players, strictSwaps: true });
+      const flexible = generatePlan({ formation, players });
+      // never worse, and every plan that moves somebody is better where it counts
+      expect(flexible.fit.unsuited).toBeLessThanOrEqual(strict.fit.unsuited);
+      const moved = flexible.substitutions.some((s) => s.moves.length > 0);
+      if (moved) {
+        expect(
+          flexible.fit.unsuited < strict.fit.unsuited || flexible.fit.unsuited + flexible.fit.emergency < strict.fit.unsuited + strict.fit.emergency,
+        ).toBe(true);
+        found = true;
+      }
+    }
+    expect(found).toBe(true);
+  });
+
+  it('keeps playing time equal even if ratings would be better with an uneven split', () => {
+    const plan = generatePlan({ formation, players: specialists(14, 2) });
+    const minutes = Object.entries(plan.minutes).filter(([id]) => id !== 'gk').map(([, m]) => m);
+    expect(Math.max(...minutes) - Math.min(...minutes)).toBeLessThanOrEqual(8); // 67 vs 60 minutes (3/4 vs 2/3)
   });
 });
 

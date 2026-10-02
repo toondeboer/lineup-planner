@@ -105,9 +105,9 @@ export default function MatchScreen() {
       <Card>
         <Heading>Substitutions</Heading>
         <Muted>
-          By default a teammate may shift position at a substitution, so that fewer players end up in a position they
-          are not rated for. Choose like-for-like if the substitute must always take the exact position of the player
-          going off.
+          Playing time is always shared as equally as possible. If a substitution would otherwise put someone in a
+          position they cannot play, a teammate may shift position. Choose like-for-like if the substitute must
+          always take the exact position of the player going off.
         </Muted>
         <Row>
           <Chip label="Teammates may shift" selected={!match.strictSwaps} onPress={() => setStrictSwaps(false)} />

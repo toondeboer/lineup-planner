@@ -44,8 +44,8 @@ starts in goal.
 | M1 Formations, group sizing, windows | done |
 | M2 Slot assignment and full plan generation | done |
 | M3 Manual overrides and recalculation | done |
-| M4 Squad and match setup screens | next |
-| M5 Plan screen | |
+| M4 Squad and match setup screens | done |
+| M5 Plan screen | next |
 | M6 WhatsApp sharing | |
 | M7 Polish | |
 

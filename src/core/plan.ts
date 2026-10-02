@@ -14,11 +14,23 @@ export interface PlanGroup {
   windows: number[];
 }
 
+/** A teammate who changes position at a substitution. */
+export interface PositionChange {
+  playerId: string;
+  fromSlotId: string;
+  toSlotId: string;
+}
+
 export interface Substitution {
   minute: number;
+  /** Slot the player going off leaves. */
   slotId: string;
   offId: string;
   onId: string;
+  /** Slot the incoming player takes. Equals `slotId` unless teammates shift around. */
+  onSlotId: string;
+  /** Teammates who change position as part of this substitution. */
+  moves: PositionChange[];
 }
 
 export interface PlanWarning {
@@ -42,6 +54,8 @@ export interface Plan {
   substitutions: Substitution[];
   /** Minutes on the pitch per player. */
   minutes: Record<string, number>;
+  /** Player-minutes at each rating of the position played (goalkeepers included). */
+  fit: Record<'preferred' | 'ok' | 'emergency' | 'unsuited', number>;
   warnings: PlanWarning[];
 }
 
@@ -49,7 +63,12 @@ export interface Plan {
 export function lineupAt(plan: Plan, minute: number): Record<string, string> {
   const lineup = { ...plan.starting };
   for (const sub of plan.substitutions) {
-    if (sub.minute <= minute) lineup[sub.slotId] = sub.onId;
+    if (sub.minute > minute) continue;
+    // Vacate every slot involved first, then fill them, so teammates can swap places.
+    delete lineup[sub.slotId];
+    for (const move of sub.moves) delete lineup[move.fromSlotId];
+    lineup[sub.onSlotId] = sub.onId;
+    for (const move of sub.moves) lineup[move.toSlotId] = move.playerId;
   }
   return lineup;
 }

@@ -1,7 +1,7 @@
 import type { Player, Role } from './types';
 
 /** Cost per minute of playing a role at the given rating (3 = preferred ... 0 = unsuitable). */
-const PENALTY = [12, 4, 1, 0] as const;
+const PENALTY = [1000, 100, 8, 0] as const;
 
 export function rating(player: Player, role: Role): 0 | 1 | 2 | 3 {
   return player.ratings[role] ?? 0;

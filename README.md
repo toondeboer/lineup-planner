@@ -17,13 +17,25 @@ occasional guests. Targets web, iOS and Android from one Expo (TypeScript) codeb
 
 ## How positions are assigned
 
-Players carry a rating per position (3 preferred, 2 comfortable, 1 emergency, 0 unsuitable).
-`generatePlan` (in `src/core/generate.ts`) splits the 10 outfield places into groups, hands each
-group a set of nearby places and a set of players, and lets a substitute always take over the
-place of the player going off. It minimises minutes spent at poor ratings (with a small
-preference for groups that stay in one area of the pitch). The search is deterministic, so the
-same squad always gives the same plan. Anyone unavoidably playing at a rating of 0 is reported
-in `plan.warnings`.
+Players carry a rating per position: 3 preferred, 2 OK, 1 emergency, 0 not suited. The planner
+(`generatePlan` in `src/core/generate.ts`) minimises, in this order of importance:
+
+1. minutes at a position rated 0 (1000 per minute),
+2. minutes at a position rated 1 (100 per minute),
+3. minutes at a position rated 2 (8 per minute), so 3 is preferred over 2,
+4. uneven playing time and teammates having to shift position, as tie-breakers.
+
+It tries every way of splitting the squad into groups that keeps everyone between a half and three
+quarters of the match (2 to 4 players per group, nobody full-time) and keeps the best plan. Within a
+group, teammates may change position at a substitution when that keeps everyone in a position they
+can play (turn this off with "Like-for-like only" on the Match tab). The search is deterministic.
+
+**Recalculate** gives a different plan of the same quality: it adds a small seeded random nudge that
+can only choose between equally good options, never worse ones. Pinned starters are kept.
+
+The Plan tab shows the share of player-minutes at each rating. Zeros that remain are usually a
+squad problem: a group needs a bench player who can cover its positions, so rating a player for more
+positions (or adding a versatile guest) is the way to remove them.
 
 Goalkeepers: players rated 3 for GK (at most two) are the keepers; if nobody is, the best rated
 player is. Pass `goalkeeperIds` to choose explicitly.

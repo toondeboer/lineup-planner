@@ -13,6 +13,10 @@ export interface MatchState {
   goalkeeperIds: string[];
   /** Manual starting-lineup overrides: slot id -> player id. */
   pinned: Record<string, string>;
+  /** Bumped by "Recalculate" to get a different but equally good plan; 0 means the default plan. */
+  seed: number;
+  /** Only like-for-like swaps: nobody changes position at a substitution. */
+  strictSwaps: boolean;
 }
 
 interface Store {
@@ -28,6 +32,8 @@ interface Store {
   toggleGoalkeeper: (id: string) => void;
   pin: (slotId: string, playerId: string | undefined) => void;
   clearPins: () => void;
+  recalculate: () => void;
+  setStrictSwaps: (strict: boolean) => void;
 }
 
 const emptyMatch: MatchState = {
@@ -36,6 +42,8 @@ const emptyMatch: MatchState = {
   formationId: '433',
   goalkeeperIds: [],
   pinned: {},
+  seed: 0,
+  strictSwaps: false,
 };
 
 export const newId = () => Math.random().toString(36).slice(2, 10);
@@ -101,12 +109,19 @@ export const useStore = create<Store>()(
           }
           return { match: { ...s.match, pinned } };
         }),
-      clearPins: () => set((s) => ({ match: { ...s.match, pinned: {} } })),
+      clearPins: () => set((s) => ({ match: { ...s.match, pinned: {}, seed: 0 } })),
+      recalculate: () => set((s) => ({ match: { ...s.match, seed: (s.match.seed ?? 0) + 1 } })),
+      setStrictSwaps: (strictSwaps) => set((s) => ({ match: { ...s.match, strictSwaps, seed: 0 } })),
     }),
     {
       name: 'lineup-planner',
       storage: createJSONStorage(() => AsyncStorage),
       version: 1,
+      // saves from before `seed` and `strictSwaps` existed
+      merge: (saved, current) => {
+        const persisted = saved as Partial<Store> | undefined;
+        return { ...current, ...persisted, match: { ...emptyMatch, ...persisted?.match } };
+      },
     },
   ),
 );

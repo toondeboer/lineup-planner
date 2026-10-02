@@ -1,8 +1,8 @@
 import { rating } from './fit';
 import { planGoalkeepers } from './goalkeepers';
-import { planGroupSizes, OUTFIELD_SLOTS, DEFAULT_MAX_GROUP_SIZE } from './groups';
+import { candidateSizings, fairnessCost, OUTFIELD_SLOTS, DEFAULT_MAX_GROUP_SIZE } from './groups';
 import { MAX_SOLVABLE_GROUP, PIN_VIOLATION, makePins, solveGroup, type GroupSolution, type Pins } from './groupSolver';
-import type { Plan, PlanGroup, PlanWarning, Substitution } from './plan';
+import type { Plan, PlanGroup, PlanWarning, PositionChange, Substitution } from './plan';
 import { lineupAt, slotGoalkeeper } from './plan';
 import type { Formation, Player, Slot } from './types';
 import { DEFAULT_MATCH_MINUTES, groupWindows, segmentBounds } from './windows';
@@ -20,10 +20,26 @@ export interface PlanInput {
    * starting 11). Groups and substitutions are planned around these players.
    */
   pinned?: Record<string, string>;
+  /**
+   * Only allow like-for-like swaps (the substitute takes exactly the position of the player going
+   * off). By default teammates may shift position at a substitution so that fewer people end up
+   * out of position.
+   */
+  strictSwaps?: boolean;
+  /**
+   * Varies the plan between equally good alternatives ("recalculate"). Never makes the plan worse:
+   * the same players still play the same positions at the same rating level. Without a seed the plan is
+   * the same every time.
+   */
+  seed?: number;
 }
 
 /** Random restarts of the local search; large groups are expensive to evaluate, so use fewer. */
-const restartsFor = (largestGroup: number) => (largestGroup >= 5 ? 6 : 24);
+const restartsFor = (largestGroup: number, base: number) => (largestGroup >= 5 ? Math.min(base, 6) : base);
+
+const MAX_CANDIDATES = 8;
+
+type Solved = { state: GroupState; solution: GroupSolution };
 
 /**
  * Picks the goalkeeper(s): everyone rated 3 for GK (at most two), otherwise the best-rated
@@ -72,11 +88,26 @@ export function generatePlan(input: PlanInput): Plan {
   const goalkeepers = planGoalkeepers(goalkeeperIds, matchMinutes);
   const outfield = players.filter((p) => !goalkeeperIds.includes(p.id));
 
-  const sizing = planGroupSizes(outfield.length, { maxGroupSize });
-  const memberCounts = [...sizing.groupSizes, ...Array<number>(sizing.fullTime).fill(1)];
-
+  // Playing time stays between a half and three quarters of the match (groups of 2 to 4, nobody
+  // full-time) whenever the squad size allows it, but every such split is tried because some of them
+  // avoid putting someone in a position they cannot play. Small squads use the fairest few splits.
+  const sizings = candidateSizings(outfield.length, { maxGroupSize });
+  const standard = sizings.filter((s) => s.fullTime === 0 && Math.max(0, ...s.groupSizes) <= 4);
+  const candidates = (standard.length > 0 ? standard : sizings.slice(0, 3)).slice(0, MAX_CANDIDATES);
   const pins = Object.keys(pinnedOutfield).length > 0 ? makePins(pinnedOutfield) : undefined;
-  const solutions = optimise(outfield, outfieldSlots, memberCounts, matchMinutes, pins);
+  let best: { solved: Solved[]; total: number } | undefined;
+  for (const sizing of candidates) {
+    const memberCounts = [...sizing.groupSizes, ...Array<number>(sizing.fullTime).fill(1)];
+    const result = optimise(outfield, outfieldSlots, memberCounts, matchMinutes, {
+      pins,
+      strict: input.strictSwaps ?? false,
+      seed: input.seed,
+      restarts: candidates.length > 1 ? 10 : 24,
+    });
+    const total = result.cost + fairnessCost(sizing, matchMinutes);
+    if (!best || total < best.total - 1e-9) best = { solved: result.solved, total };
+  }
+  const solutions = best!.solved;
   return buildPlan(input, matchMinutes, goalkeepers, goalkeeperIds, solutions);
 }
 
@@ -102,25 +133,26 @@ function optimise(
   slots: Slot[],
   memberCounts: number[],
   matchMinutes: number,
-  pins?: Pins,
-): { state: GroupState; solution: GroupSolution }[] {
+  { pins, strict, seed, restarts: baseRestarts }: { pins?: Pins; strict: boolean; seed?: number; restarts: number },
+): { solved: Solved[]; cost: number } {
   const cache = new Map<string, GroupSolution>();
+  const jitter = seed === undefined ? undefined : (playerId: string, slotId: string) => JITTER * hash01(seed, playerId, slotId);
   const evaluate = (state: GroupState): GroupSolution => {
     const key =
       state.slots.map((s) => s.id).sort().join(',') + '|' + state.members.map((m) => m.id).sort().join(',');
     let hit = cache.get(key);
     if (!hit) {
       const segments = segmentLengths(state.members.length, matchMinutes);
-      hit = solveGroup(state.members, state.slots, segments, pins);
+      hit = solveGroup(state.members, state.slots, segments, { pins, strict, jitter });
       cache.set(key, hit);
     }
     return hit;
   };
 
-  const rand = mulberry32(1);
+  const rand = mulberry32(seed === undefined ? 1 : 1000 + seed);
   let best: { states: GroupState[]; cost: number } | undefined;
 
-  const restarts = restartsFor(Math.max(...memberCounts));
+  const restarts = restartsFor(Math.max(...memberCounts), baseRestarts);
   for (let r = 0; r < restarts; r++) {
     // Slots in pitch order (attack to defence, left to right) for the first start, shuffled afterwards.
     const orderedSlots = [...slots].sort((a, b) => a.y - b.y || a.x - b.x);
@@ -214,7 +246,7 @@ function optimise(
   }
 
   if (best!.cost >= PIN_VIOLATION) throw new Error('Could not plan around the pinned starters');
-  return best!.states.map((state) => ({ state, solution: evaluate(state) }));
+  return { solved: best!.states.map((state) => ({ state, solution: evaluate(state) })), cost: best!.cost };
 }
 
 function swapMembers(a: GroupState, b: GroupState, i: number, j: number): [GroupState, GroupState] {
@@ -235,6 +267,18 @@ function segmentLengths(groupSize: number, matchMinutes: number): number[] {
   if (groupSize === 1) return [matchMinutes];
   const bounds = segmentBounds(groupSize, matchMinutes);
   return bounds.slice(1).map((end, i) => end - bounds[i]);
+}
+
+/** Per-minute noise added to ratings when a seed is given; far below the gap between rating levels. */
+const JITTER = 0.9;
+
+function hash01(seed: number, a: string, b: string): number {
+  let h = 2166136261 ^ seed;
+  for (const ch of `${a}|${b}`) h = Math.imul(h ^ ch.charCodeAt(0), 16777619);
+  h ^= h >>> 15;
+  h = Math.imul(h, 2246822519);
+  h ^= h >>> 13;
+  return (h >>> 0) / 4294967296;
 }
 
 function mulberry32(seed: number): () => number {
@@ -275,27 +319,32 @@ function buildPlan(
   // Stable group order: top-left of the pitch first.
   const sorted = [...solved].sort((a, b) => firstSlotKey(a.state.slots) - firstSlotKey(b.state.slots));
   sorted.forEach(({ solution }, index) => {
-    const { order, slotOrder } = solution;
+    const { order, assignments } = solution;
     const g = order.length;
     const windows = g === 1 ? [] : groupWindows(g, matchMinutes);
-    groups.push({
-      id: `G${index + 1}`,
-      slotIds: g === 1 ? [slotOrder[0].id] : slotOrder.map((s) => s.id),
-      memberIds: order.map((p) => p.id),
-      windows,
-    });
-    if (g === 1) {
-      starting[slotOrder[0].id] = order[0].id;
-      return;
-    }
+    const slotIds = [...new Set(assignments.flatMap((a) => Object.values(a).map((slot) => slot.id)))];
+    groups.push({ id: `G${index + 1}`, slotIds, memberIds: order.map((p) => p.id), windows });
+    for (const [playerId, slot] of Object.entries(assignments[0])) starting[slot.id] = playerId;
+    if (g === 1) return;
     startingBench.push(order[0].id);
-    for (let k = 1; k < g; k++) starting[slotOrder[k - 1].id] = order[k].id;
     for (let k = 1; k < g; k++) {
+      const before = assignments[k - 1];
+      const after = assignments[k];
+      const on = order[k - 1];
+      const off = order[k];
+      const moves: PositionChange[] = [];
+      for (const [playerId, slot] of Object.entries(after)) {
+        if (playerId !== on.id && before[playerId] && before[playerId].id !== slot.id) {
+          moves.push({ playerId, fromSlotId: before[playerId].id, toSlotId: slot.id });
+        }
+      }
       substitutions.push({
         minute: windows[k - 1],
-        slotId: slotOrder[k - 1].id,
-        offId: order[k].id,
-        onId: order[k - 1].id,
+        slotId: before[off.id].id,
+        offId: off.id,
+        onId: on.id,
+        onSlotId: after[on.id].id,
+        moves,
       });
     }
   });
@@ -306,6 +355,8 @@ function buildPlan(
       slotId: gkSlotId,
       offId: goalkeepers[0].playerId,
       onId: goalkeepers[1].playerId,
+      onSlotId: gkSlotId,
+      moves: [],
     });
   }
   const slotIndex = new Map(formation.slots.map((s, i) => [s.id, i]));
@@ -320,9 +371,11 @@ function buildPlan(
     startingBench,
     substitutions,
     minutes: {},
+    fit: { preferred: 0, ok: 0, emergency: 0, unsuited: 0 },
     warnings: [],
   };
   plan.minutes = playingMinutes(plan, players);
+  plan.fit = fitMinutes(plan, formation, players);
   plan.warnings = findWarnings(plan, formation, players, goalkeeperIds);
   return plan;
 }
@@ -374,4 +427,19 @@ function findWarnings(plan: Plan, formation: Formation, players: Player[], goalk
     if (rating(byId.get(id)!, 'GK') === 0) warnings.push({ type: 'no-goalkeeper-rating', playerId: id });
   }
   return warnings;
+}
+
+const FIT_NAMES = ['unsuited', 'emergency', 'ok', 'preferred'] as const;
+
+function fitMinutes(plan: Plan, formation: Formation, players: Player[]): Plan['fit'] {
+  const fit = { preferred: 0, ok: 0, emergency: 0, unsuited: 0 };
+  const byId = new Map(players.map((p) => [p.id, p]));
+  const roleOf = new Map(formation.slots.map((s) => [s.id, s.role]));
+  const bounds = boundaries(plan);
+  bounds.slice(0, -1).forEach((from, i) => {
+    for (const [slotId, playerId] of Object.entries(lineupAt(plan, from))) {
+      fit[FIT_NAMES[rating(byId.get(playerId)!, roleOf.get(slotId)!)]] += bounds[i + 1] - from;
+    }
+  });
+  return fit;
 }

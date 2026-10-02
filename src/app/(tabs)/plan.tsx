@@ -1,18 +1,38 @@
 import { router } from 'expo-router';
 import { useState } from 'react';
 import { Text, View } from 'react-native';
-import { substitutionLines } from '../../core';
+import { substitutionLines, type Plan } from '../../core';
 import { useStore } from '../../state/store';
 import { usePlan } from '../../state/usePlan';
 import { Button, Card, Chip, Heading, Muted, Row, Screen, Title } from '../../ui/components';
 import { Pitch, type PitchMarker } from '../../ui/Pitch';
 import { colors, groupColors } from '../../ui/theme';
 
+function FitSummary({ fit }: { fit: Plan['fit'] }) {
+  const total = fit.preferred + fit.ok + fit.emergency + fit.unsuited;
+  const pct = (n: number) => `${Math.round((100 * n) / total)}%`;
+  return (
+    <Card>
+      <Heading>Position fit</Heading>
+      <Text style={{ color: colors.text }}>
+        {`${pct(fit.preferred)} preferred · ${pct(fit.ok)} OK · ${pct(fit.emergency)} emergency · ${pct(fit.unsuited)} not suited`}
+      </Text>
+      {fit.unsuited + fit.emergency > 0 && (
+        <Muted>
+          Some players end up in positions they are not rated for. Rate them for more positions on the Squad tab, or
+          tap Recalculate.
+        </Muted>
+      )}
+    </Card>
+  );
+}
+
 export default function PlanScreen() {
   const { plan, error, formation, players } = usePlan();
   const pinned = useStore((s) => s.match.pinned);
   const pin = useStore((s) => s.pin);
   const clearPins = useStore((s) => s.clearPins);
+  const recalculate = useStore((s) => s.recalculate);
   const [selected, setSelected] = useState<string | undefined>();
 
   if (!plan) {
@@ -90,8 +110,11 @@ export default function PlanScreen() {
           </Row>
         </Card>
       )}
+      <Button label="Recalculate" kind="secondary" onPress={() => { recalculate(); setSelected(undefined); }} />
       <Button label="Share lineup" onPress={() => router.push('/share')} />
       {hasPins && <Button label="Reset to automatic lineup" kind="secondary" onPress={() => { clearPins(); setSelected(undefined); }} />}
+
+      <FitSummary fit={plan.fit} />
 
       {plan.warnings.length > 0 && (
         <Card style={{ borderColor: colors.warn }}>
@@ -113,7 +136,14 @@ export default function PlanScreen() {
           <Row key={i} style={{ flexWrap: 'nowrap' }}>
             <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: colorOfSlot(l.slotId) }} />
             <Text style={{ width: 40, fontWeight: '700', color: colors.text }}>{`${l.minute}'`}</Text>
-            <Text style={{ flexShrink: 1, color: colors.text }}>{`${l.on} on, ${l.off} off (${l.slotId})`}</Text>
+            <View style={{ flexShrink: 1 }}>
+              <Text style={{ color: colors.text }}>
+                {`${l.on} on for ${l.off} (${l.slotId}${l.onSlotId ? `, plays ${l.onSlotId}` : ''})`}
+              </Text>
+              {l.moves.map((m, j) => (
+                <Muted key={j}>{`↳ ${m.name} moves to ${m.toSlotId}`}</Muted>
+              ))}
+            </View>
           </Row>
         ))}
       </Card>

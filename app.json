@@ -19,7 +19,13 @@
       "predictiveBackGestureEnabled": false
     },
     "web": {
+      "bundler": "metro",
+      "output": "single",
       "favicon": "./assets/favicon.png"
-    }
+    },
+    "scheme": "lineup-planner",
+    "plugins": [
+      "expo-router"
+    ]
   }
 }

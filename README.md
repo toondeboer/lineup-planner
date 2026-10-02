@@ -28,6 +28,14 @@ in `plan.warnings`.
 Goalkeepers: players rated 3 for GK (at most two) are the keepers; if nobody is, the best rated
 player is. Pass `goalkeeperIds` to choose explicitly.
 
+## Manual overrides
+
+`generatePlan({ ..., pinned: { ST: 'p5', CB1: 'p9' } })` forces those players to start in those
+slots (pin all 11 slots to force a complete starting XI). The groups, rotation order and
+substitution minutes are then recalculated around them: the players you leave out of the
+starting XI become the substitutes, one per group. Pinning a slot to a keeper chooses who
+starts in goal.
+
 ## Status
 
 | Milestone | State |
@@ -35,8 +43,8 @@ player is. Pass `goalkeeperIds` to choose explicitly.
 | M0 Scaffold, CI | done |
 | M1 Formations, group sizing, windows | done |
 | M2 Slot assignment and full plan generation | done |
-| M3 Manual overrides and recalculation | next |
-| M4 Squad and match setup screens | |
+| M3 Manual overrides and recalculation | done |
+| M4 Squad and match setup screens | next |
 | M5 Plan screen | |
 | M6 WhatsApp sharing | |
 | M7 Polish | |

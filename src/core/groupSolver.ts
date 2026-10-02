@@ -14,6 +14,30 @@ export interface GroupSolution {
 
 export const MAX_SOLVABLE_GROUP = 7;
 
+/** Cost added for each broken pin. Large enough to dominate every rating cost. */
+export const PIN_VIOLATION = 1e6;
+
+/** Kick-off pins: players who must start in a given slot. */
+export interface Pins {
+  bySlot: ReadonlyMap<string, string>;
+  byPlayer: ReadonlyMap<string, string>;
+}
+
+export function makePins(slotToPlayer: Record<string, string>): Pins {
+  const entries = Object.entries(slotToPlayer);
+  return {
+    bySlot: new Map(entries),
+    byPlayer: new Map(entries.map(([slot, player]) => [player, slot])),
+  };
+}
+
+function violates(pins: Pins | undefined, player: Player, slot: Slot): boolean {
+  if (!pins) return false;
+  const wantedSlot = pins.byPlayer.get(player.id);
+  const wantedPlayer = pins.bySlot.get(slot.id);
+  return (wantedSlot !== undefined && wantedSlot !== slot.id) || (wantedPlayer !== undefined && wantedPlayer !== player.id);
+}
+
 /** Weight of keeping a group's slots close together, per match minute. */
 const COHESION_PER_MINUTE = 0.4;
 
@@ -26,8 +50,10 @@ const COHESION_PER_MINUTE = 0.4;
  * a chain over (member, slot) choices which we solve exactly with a memoised search.
  *
  * A group of one (a full-time player) just takes its only slot.
+ *
+ * With `pins`, players must start in their pinned slot; broken pins add `PIN_VIOLATION` to the cost.
  */
-export function solveGroup(members: Player[], slots: Slot[], segments: number[]): GroupSolution {
+export function solveGroup(members: Player[], slots: Slot[], segments: number[], pins?: Pins): GroupSolution {
   const g = members.length;
   if (slots.length !== g - 1 && !(g === 1 && slots.length === 1)) {
     throw new Error(`A group of ${g} must cover ${g === 1 ? 1 : g - 1} slots, got ${slots.length}`);
@@ -37,7 +63,7 @@ export function solveGroup(members: Player[], slots: Slot[], segments: number[])
 
   if (g === 1) {
     return {
-      cost: matchMinutes * penalty(members[0], slots[0].role),
+      cost: matchMinutes * penalty(members[0], slots[0].role) + (violates(pins, members[0], slots[0]) ? PIN_VIOLATION : 0),
       order: [members[0]],
       slotOrder: [slots[0]],
     };
@@ -71,7 +97,13 @@ export function solveGroup(members: Player[], slots: Slot[], segments: number[])
     let best = { cost: Infinity, pick: -1, next: -1 };
     for (let m = 0; m < g; m++) {
       if (memberMask & (1 << m)) continue;
-      const own = k === 0 ? 0 : before[k] * pen[m][slotK];
+      // Pinned players start on the pitch, in their pinned slot.
+      const own =
+        k === 0
+          ? pins?.byPlayer.has(members[m].id)
+            ? PIN_VIOLATION
+            : 0
+          : before[k] * pen[m][slotK] + (violates(pins, members[m], slots[slotK]) ? PIN_VIOLATION : 0);
       if (k === g - 1) {
         if (own < best.cost) best = { cost: own, pick: m, next: -1 };
         continue;

@@ -15,6 +15,7 @@ export default function MatchScreen() {
   const removeGuest = useStore((s) => s.removeGuest);
   const setFormation = useStore((s) => s.setFormation);
   const toggleGoalkeeper = useStore((s) => s.toggleGoalkeeper);
+  const setStrictSwaps = useStore((s) => s.setStrictSwaps);
 
   const [guestName, setGuestName] = useState('');
   const [guestPosition, setGuestPosition] = useState<Role | 'ANY'>('ANY');
@@ -98,6 +99,19 @@ export default function MatchScreen() {
           {players.map((p) => (
             <Chip key={p.id} label={p.name} selected={match.goalkeeperIds.includes(p.id)} onPress={() => toggleGoalkeeper(p.id)} />
           ))}
+        </Row>
+      </Card>
+
+      <Card>
+        <Heading>Substitutions</Heading>
+        <Muted>
+          Playing time is always shared as equally as possible. If a substitution would otherwise put someone in a
+          position they cannot play, a teammate may shift position. Choose like-for-like if the substitute must
+          always take the exact position of the player going off.
+        </Muted>
+        <Row>
+          <Chip label="Teammates may shift" selected={!match.strictSwaps} onPress={() => setStrictSwaps(false)} />
+          <Chip label="Like-for-like only" selected={!!match.strictSwaps} onPress={() => setStrictSwaps(true)} />
         </Row>
       </Card>
 

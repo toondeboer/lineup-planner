@@ -17,13 +17,26 @@ occasional guests. Targets web, iOS and Android from one Expo (TypeScript) codeb
 
 ## How positions are assigned
 
-Players carry a rating per position (3 preferred, 2 comfortable, 1 emergency, 0 unsuitable).
-`generatePlan` (in `src/core/generate.ts`) splits the 10 outfield places into groups, hands each
-group a set of nearby places and a set of players, and lets a substitute always take over the
-place of the player going off. It minimises minutes spent at poor ratings (with a small
-preference for groups that stay in one area of the pitch). The search is deterministic, so the
-same squad always gives the same plan. Anyone unavoidably playing at a rating of 0 is reported
-in `plan.warnings`.
+Players carry a rating per position: 3 preferred, 2 OK, 1 emergency, 0 "no". The planner
+(`generatePlan` in `src/core/generate.ts`) works through these priorities, strictly in this order, so a
+lower one can never override a higher one:
+
+1. **Equal playing time.** The squad is split into the fairest rotation groups (see above), with
+   substitutions only at the fixed windows (15', 22', 30', 45', 60', 67', 75' ...).
+2. **Fewest minutes at a position rated "no".**
+3. **Fewest minutes at "emergency", then at "OK"**, so a 3 is preferred over a 2.
+4. **Position shifts.** A teammate may change position at a substitution when that removes a "no" or an
+   "emergency" position, but not just to upgrade a 2 to a 3. Turn shifts off with "Like-for-like only" on
+   the Match tab. (Groups of 6, which only happen with 11 or 12 outfield players, always swap like-for-like.)
+
+Ties are broken by keeping a group's positions close together on the pitch. The search is deterministic.
+
+**Recalculate** gives a different plan of the same quality: it adds a tiny seeded nudge that can only choose
+between plans that are equal on all of the priorities above. Pinned starters are kept.
+
+The Plan tab shows the share of player-minutes at each rating. Zeros that remain are usually a squad
+problem: a group needs a bench player who can cover its positions, so rating a player for more positions
+(or adding a versatile guest) is the way to remove them.
 
 Goalkeepers: players rated 3 for GK (at most two) are the keepers; if nobody is, the best rated
 player is. Pass `goalkeeperIds` to choose explicitly.

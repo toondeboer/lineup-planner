@@ -40,4 +40,17 @@ describe('share message', () => {
     const noSubs = generatePlan({ formation, players: ten });
     expect(formatShareMessage(noSubs, ten, formation.name)).toContain('No substitutions.');
   });
+
+  it('mentions teammates who change position', () => {
+    const sub = plan.substitutions[0];
+    const withMove = {
+      ...plan,
+      substitutions: [
+        { ...sub, onSlotId: 'CB1', moves: [{ playerId: 'p3', fromSlotId: 'CB1', toSlotId: sub.slotId }] },
+      ],
+    };
+    const text = formatShareMessage(withMove, players, formation.name);
+    expect(text).toContain('plays CB1');
+    expect(text).toContain(`↳ Player 3 moves to ${sub.slotId}`);
+  });
 });

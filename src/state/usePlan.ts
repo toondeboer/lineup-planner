@@ -22,6 +22,8 @@ export function usePlan(): PlanResult {
         players,
         goalkeeperIds: match.goalkeeperIds.length ? match.goalkeeperIds : undefined,
         pinned: match.pinned,
+        strictSwaps: match.strictSwaps,
+        seed: match.seed ? match.seed : undefined,
       });
       return { formation, players, plan };
     } catch (e) {

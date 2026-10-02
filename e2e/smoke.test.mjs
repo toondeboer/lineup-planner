@@ -61,6 +61,16 @@ test('plan shows 11 starters and substitutions', async () => {
   await page.close();
 });
 
+test('shows position fit and recalculates', async () => {
+  const { page, errors } = await open('/plan');
+  await page.getByText('Position fit').waitFor();
+  await page.getByRole('button', { name: 'Recalculate' }).click();
+  await page.getByText('Position fit').waitFor();
+  assert.equal(await page.locator('[aria-label^="Slot "]').count(), 11);
+  assert.deepEqual(errors, []);
+  await page.close();
+});
+
 test('forcing a starter recalculates the plan', async () => {
   const { page } = await open('/plan');
   await page.click('[aria-label="Slot ST"]');

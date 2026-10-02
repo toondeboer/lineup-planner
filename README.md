@@ -59,7 +59,8 @@ their minutes (`formatShareMessage` in `src/core/format.ts`).
 | M4 Squad and match setup screens | done |
 | M5 Plan screen | done |
 | M6 WhatsApp sharing | done (device test pending) |
-| M7 Polish, e2e test, device test | next |
+| M7 Web smoke test (e2e) | done |
+| Device test of native share, lint config | open |
 
 ## Development
 
@@ -67,6 +68,7 @@ their minutes (`formatShareMessage` in `src/core/format.ts`).
 npm install
 npm test            # unit tests for the core module (vitest)
 npm run typecheck
+npm run e2e         # export the web build and run the Playwright smoke test (needs Chromium)
 npm run web         # start the Expo dev server for web (also: npm run ios / android)
 ```
 

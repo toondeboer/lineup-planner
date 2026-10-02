@@ -15,14 +15,27 @@ occasional guests. Targets web, iOS and Android from one Expo (TypeScript) codeb
 - Substitutions happen at even fractions of the match, rounded down: groups of 4 swap at
   22', 45', 67'; groups of 3 at 30', 60'; groups of 2 at half-time; groups of 6 every 15'.
 
+## How positions are assigned
+
+Players carry a rating per position (3 preferred, 2 comfortable, 1 emergency, 0 unsuitable).
+`generatePlan` (in `src/core/generate.ts`) splits the 10 outfield places into groups, hands each
+group a set of nearby places and a set of players, and lets a substitute always take over the
+place of the player going off. It minimises minutes spent at poor ratings (with a small
+preference for groups that stay in one area of the pitch). The search is deterministic, so the
+same squad always gives the same plan. Anyone unavoidably playing at a rating of 0 is reported
+in `plan.warnings`.
+
+Goalkeepers: players rated 3 for GK (at most two) are the keepers; if nobody is, the best rated
+player is. Pass `goalkeeperIds` to choose explicitly.
+
 ## Status
 
 | Milestone | State |
 |---|---|
 | M0 Scaffold, CI | done |
 | M1 Formations, group sizing, windows | done |
-| M2 Slot assignment and full plan generation | next |
-| M3 Manual overrides and recalculation | |
+| M2 Slot assignment and full plan generation | done |
+| M3 Manual overrides and recalculation | next |
 | M4 Squad and match setup screens | |
 | M5 Plan screen | |
 | M6 WhatsApp sharing | |

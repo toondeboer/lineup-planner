@@ -3,3 +3,6 @@ export * from './formations';
 export * from './groups';
 export * from './windows';
 export * from './goalkeepers';
+export * from './fit';
+export * from './plan';
+export * from './generate';

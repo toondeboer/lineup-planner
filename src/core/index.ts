@@ -1,6 +1,7 @@
 export * from './types';
 export * from './formations';
 export * from './groups';
+export * from './lines';
 export * from './windows';
 export * from './goalkeepers';
 export * from './fit';

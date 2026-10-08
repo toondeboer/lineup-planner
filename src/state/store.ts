@@ -1,7 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
-import type { Player } from '../core';
+import type { Player, Rotation } from '../core';
 
 export interface MatchState {
   /** Ids of squad members who are available for this match. */
@@ -17,6 +17,8 @@ export interface MatchState {
   seed: number;
   /** Only like-for-like swaps: nobody changes position at a substitution. */
   strictSwaps: boolean;
+  /** Rotation groups per line (defence, midfield, attack), or the most equal playing time. */
+  rotation: Rotation;
 }
 
 interface Store {
@@ -34,6 +36,7 @@ interface Store {
   clearPins: () => void;
   recalculate: () => void;
   setStrictSwaps: (strict: boolean) => void;
+  setRotation: (rotation: Rotation) => void;
 }
 
 const emptyMatch: MatchState = {
@@ -44,6 +47,7 @@ const emptyMatch: MatchState = {
   pinned: {},
   seed: 0,
   strictSwaps: false,
+  rotation: 'lines',
 };
 
 export const newId = () => Math.random().toString(36).slice(2, 10);
@@ -112,12 +116,13 @@ export const useStore = create<Store>()(
       clearPins: () => set((s) => ({ match: { ...s.match, pinned: {}, seed: 0 } })),
       recalculate: () => set((s) => ({ match: { ...s.match, seed: (s.match.seed ?? 0) + 1 } })),
       setStrictSwaps: (strictSwaps) => set((s) => ({ match: { ...s.match, strictSwaps, seed: 0 } })),
+      setRotation: (rotation) => set((s) => ({ match: { ...s.match, rotation, seed: 0 } })),
     }),
     {
       name: 'lineup-planner',
       storage: createJSONStorage(() => AsyncStorage),
       version: 1,
-      // saves from before `seed` and `strictSwaps` existed
+      // saves from before `seed`, `strictSwaps` and `rotation` existed (those get line rotation)
       merge: (saved, current) => {
         const persisted = saved as Partial<Store> | undefined;
         return { ...current, ...persisted, match: { ...emptyMatch, ...persisted?.match } };

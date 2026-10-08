@@ -110,7 +110,7 @@ describe('priorities', () => {
   });
 
   it('keeps playing time equal even if ratings would be better with an uneven split', () => {
-    const plan = generatePlan({ formation, players: specialists(14, 2) });
+    const plan = generatePlan({ formation, players: specialists(14, 2), rotation: 'equal' });
     const minutes = Object.entries(plan.minutes).filter(([id]) => id !== 'gk').map(([, m]) => m);
     expect(Math.max(...minutes) - Math.min(...minutes)).toBeLessThanOrEqual(8); // 67 vs 60 minutes (3/4 vs 2/3)
   });

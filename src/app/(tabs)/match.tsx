@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Text, TextInput } from 'react-native';
-import { FORMATIONS, ROLES, chooseGoalkeepers, describeRotation, newGuest, type Role } from '../../core';
+import { FORMATIONS, ROLES, chooseGoalkeepers, describeRotation, getFormation, newGuest, type Role } from '../../core';
 import { availablePlayers, newId, useStore } from '../../state/store';
 import { Button, Card, Chip, Heading, Muted, Row, Screen, Title } from '../../ui/components';
 import { ROLE_NAMES } from '../../ui/roles';
@@ -16,6 +16,7 @@ export default function MatchScreen() {
   const setFormation = useStore((s) => s.setFormation);
   const toggleGoalkeeper = useStore((s) => s.toggleGoalkeeper);
   const setStrictSwaps = useStore((s) => s.setStrictSwaps);
+  const setRotation = useStore((s) => s.setRotation);
 
   const [guestName, setGuestName] = useState('');
   const [guestPosition, setGuestPosition] = useState<Role | 'ANY'>('ANY');
@@ -103,10 +104,23 @@ export default function MatchScreen() {
       </Card>
 
       <Card>
+        <Heading>Rotation groups</Heading>
+        <Muted>
+          {match.rotation === 'equal'
+            ? 'Playing time is shared as equally as possible; a group may mix players from different lines.'
+            : 'Each group stays within one line (defence, midfield, attack), so players can arrange their own swaps. Where possible all groups swap at the same moments; someone may play the whole match to make that work.'}
+        </Muted>
+        <Row>
+          <Chip label="Per line" selected={match.rotation !== 'equal'} onPress={() => setRotation('lines')} />
+          <Chip label="Most equal time" selected={match.rotation === 'equal'} onPress={() => setRotation('equal')} />
+        </Row>
+      </Card>
+
+      <Card>
         <Heading>Substitutions</Heading>
         <Muted>
-          Playing time is always shared as equally as possible. If a substitution would otherwise put someone in a
-          position they cannot play, a teammate may shift position. Choose like-for-like if the substitute must
+          If a substitution would otherwise put someone in a position they cannot play, a teammate in the same group
+          may shift position. Choose like-for-like if the substitute must
           always take the exact position of the player going off.
         </Muted>
         <Row>
@@ -117,7 +131,12 @@ export default function MatchScreen() {
 
       <Card>
         <Heading>{`${players.length} players`}</Heading>
-        <Muted>{describeRotation(players.length, keepers.length || 1)}</Muted>
+        <Muted>
+          {describeRotation(players.length, keepers.length || 1, {
+            formation: getFormation(match.formationId),
+            rotation: match.rotation,
+          })}
+        </Muted>
       </Card>
     </Screen>
   );

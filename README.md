@@ -15,13 +15,26 @@ occasional guests. Targets web, iOS and Android from one Expo (TypeScript) codeb
 - Substitutions happen at even fractions of the match, rounded down: groups of 4 swap at
   22', 45', 67'; groups of 3 at 30', 60'; groups of 2 at half-time; groups of 6 every 15'.
 
+### Per line (default) or most equal time
+
+The Match tab has a **Rotation groups** switch.
+
+- **Per line** (default, `rotation: 'lines'`): every group stays within defence, midfield or attack, so the
+  players of a line can arrange their own swaps without a coach. Among splits where nobody plays more than a
+  quarter of the match longer than a teammate, the one with the fewest substitution moments wins (ideally all
+  groups swap together); then the fairest. Places in a line that no group covers go to full-time players.
+  Example: 14 players in a 4-3-3 → defence 4 rotating + 1 full match, midfield 4, attack 4, all swapping at
+  22', 45', 67'. The split per line is in `lineSizings` (`src/core/lines.ts`).
+- **Most equal time** (`rotation: 'equal'`): the fairest split overall (14 players → 5+4+4, mixing lines when
+  that fits the ratings better), at the cost of more substitution moments.
+
 ## How positions are assigned
 
 Players carry a rating per position: 3 preferred, 2 OK, 1 emergency, 0 "no". The planner
 (`generatePlan` in `src/core/generate.ts`) works through these priorities, strictly in this order, so a
 lower one can never override a higher one:
 
-1. **Equal playing time.** The squad is split into the fairest rotation groups (see above), with
+1. **Playing time.** The squad is split into rotation groups as described above (per line or most equal), with
    substitutions only at the fixed windows (15', 22', 30', 45', 60', 67', 75' ...).
 2. **Fewest minutes at a position rated "no".**
 3. **Fewest minutes at "emergency", then at "OK"**, so a 3 is preferred over a 2.

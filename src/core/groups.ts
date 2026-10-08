@@ -92,11 +92,12 @@ export function candidateSizings(outfieldPlayers: number, options: GroupSizingOp
   visit([], OUTFIELD_SLOTS, maxGroupSize - 1);
 
   if (found.length === 0) throw new Error(`No valid grouping for ${outfieldPlayers} outfield players`);
-  found.sort((a, b) => compare(a.key, b.key));
+  found.sort((a, b) => compareKeys(a.key, b.key));
   return found.map((f) => f.sizing);
 }
 
-function compare(a: number[], b: number[]): number {
+/** Lexicographic comparison of sort keys. */
+export function compareKeys(a: number[], b: number[]): number {
   for (let i = 0; i < a.length; i++) {
     if (a[i] !== b[i]) return a[i] - b[i];
   }

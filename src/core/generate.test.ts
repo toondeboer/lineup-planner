@@ -3,6 +3,7 @@ import { FORMATIONS, getFormation } from './formations';
 import { generatePlan, chooseGoalkeepers } from './generate';
 import { rating } from './fit';
 import { planGroupSizes } from './groups';
+import { lineOf, lineSizings } from './lines';
 import { lineupAt } from './plan';
 import { ROLES, type Player, type Rating, type Role } from './types';
 
@@ -34,13 +35,13 @@ function randomSquad(outfield: number, seed: number): Player[] {
 
 describe('generatePlan invariants', () => {
   const cases = Array.from({ length: 11 }, (_, i) => i + 10).flatMap((n) =>
-    ['433', '442', '352'].map((f) => [n, f] as const),
+    ['433', '442', '352'].flatMap((f) => (['lines', 'equal'] as const).map((rotation) => [n, f, rotation] as const)),
   );
 
-  it.each(cases)('%i outfield players, formation %s', (n, formationId) => {
+  it.each(cases)('%i outfield players, formation %s, rotation %s', (n, formationId, rotation) => {
     const formation = getFormation(formationId);
     const players = randomSquad(n, n * 31 + formationId.length);
-    const plan = generatePlan({ formation, players });
+    const plan = generatePlan({ formation, players, rotation });
     const slotIds = formation.slots.map((s) => s.id).sort();
 
     // 11 distinct players fill every slot at every minute
@@ -72,9 +73,15 @@ describe('generatePlan invariants', () => {
     const sizes = plan.groups.map((g) => g.memberIds.length);
     expect(sizes.reduce((a, g) => a + (g === 1 ? 1 : g - 1), 0)).toBe(10);
     expect(plan.groups.filter((g) => g.memberIds.length > 1)).toHaveLength(n - 10);
-    // playing time is split as evenly as possible, whatever the ratings are
-    const fairest = planGroupSizes(n);
-    expect([...sizes].sort()).toEqual([...fairest.groupSizes, ...Array(fairest.fullTime).fill(1)].sort());
+    // the group sizes follow from the squad size and formation, whatever the ratings are
+    const best = rotation === 'equal' ? planGroupSizes(n) : lineSizings(formation.slots, n)[0];
+    expect([...sizes].sort()).toEqual([...best.groupSizes, ...Array(best.fullTime).fill(1)].sort());
+    if (rotation === 'lines') {
+      const roleOf = new Map(formation.slots.map((s) => [s.id, s.role]));
+      for (const group of plan.groups) {
+        expect(new Set(group.slotIds.map((id) => lineOf(roleOf.get(id)!))).size).toBe(1);
+      }
+    }
   });
 
   it('is deterministic', () => {
@@ -111,7 +118,7 @@ describe('generatePlan quality', () => {
 
   it('shows the direct-swap substitution format for a 14 player squad', () => {
     const players = randomSquad(14, 3);
-    const plan = generatePlan({ formation: getFormation('442'), players });
+    const plan = generatePlan({ formation: getFormation('442'), players, rotation: 'equal' });
     expect(plan.substitutions.map((s) => s.minute)).toEqual(
       [...plan.substitutions.map((s) => s.minute)].sort((a, b) => a - b),
     );
@@ -159,6 +166,6 @@ describe('goalkeepers', () => {
 describe('every formation', () => {
   it.each(FORMATIONS.map((f) => [f.id] as const))('%s produces a plan for 15 players', (id) => {
     const plan = generatePlan({ formation: getFormation(id), players: randomSquad(14, 11) });
-    expect(plan.groups).toHaveLength(4);
+    expect(plan.groups.filter((g) => g.memberIds.length > 1)).toHaveLength(4);
   });
 });

@@ -1,6 +1,7 @@
 import { rating } from './fit';
 import { planGoalkeepers } from './goalkeepers';
-import { candidateSizings, fairnessCost, OUTFIELD_SLOTS, DEFAULT_MAX_GROUP_SIZE } from './groups';
+import { candidateSizings, compareKeys, fairnessCost, OUTFIELD_SLOTS, DEFAULT_MAX_GROUP_SIZE } from './groups';
+import { lineOf, lineSizings, type Line } from './lines';
 import { MAX_SOLVABLE_GROUP, PIN_VIOLATION, makePins, solveGroup, type GroupSolution, type Pins } from './groupSolver';
 import type { Plan, PlanGroup, PlanWarning, PositionChange, Substitution } from './plan';
 import { lineupAt, slotGoalkeeper } from './plan';
@@ -27,6 +28,12 @@ export interface PlanInput {
    */
   strictSwaps?: boolean;
   /**
+   * How players are grouped. `'lines'` (default): every rotation group stays within defence,
+   * midfield or attack, and groups share the same substitution moments where that keeps playing time
+   * within a quarter of the match. `'equal'`: the most equal playing time, groups may span lines.
+   */
+  rotation?: Rotation;
+  /**
    * Varies the plan between equally good alternatives ("recalculate"). Never makes the plan worse:
    * the same players still play the same positions at the same rating level. Without a seed the plan is
    * the same every time.
@@ -38,6 +45,14 @@ export interface PlanInput {
 const restartsFor = (largestGroup: number, base: number) => (largestGroup >= 5 ? Math.min(base, 6) : base);
 
 const MAX_CANDIDATES = 8;
+
+export type Rotation = 'lines' | 'equal';
+
+/** A group to fill: its number of members (1 = full-time) and, for line rotation, its line. */
+interface Unit {
+  count: number;
+  line?: Line;
+}
 
 type Solved = { state: GroupState; solution: GroupSolution };
 
@@ -88,33 +103,54 @@ export function generatePlan(input: PlanInput): Plan {
   const goalkeepers = planGoalkeepers(goalkeeperIds, matchMinutes);
   const outfield = players.filter((p) => !goalkeeperIds.includes(p.id));
 
-  // Equal playing time comes first: only the fairest split of the squad into rotation groups is used
-  // (equally fair splits are all tried). Positions are optimised within that.
-  const sizings = candidateSizings(outfield.length, { maxGroupSize });
-  const fairest = fairnessCost(sizings[0], matchMinutes);
-  const candidates = sizings
-    .filter((s) => fairnessCost(s, matchMinutes) <= fairest + 1e-6)
-    .slice(0, MAX_CANDIDATES);
+  // Playing time comes first: only the best splits of the squad into rotation groups are used
+  // (equally good splits are all tried). Positions are optimised within that.
+  const candidates = groupLayouts(input.rotation ?? 'lines', outfieldSlots, outfield.length, maxGroupSize, matchMinutes);
   const pins = Object.keys(pinnedOutfield).length > 0 ? makePins(pinnedOutfield) : undefined;
   let best: { solved: Solved[]; total: number } | undefined;
-  for (const sizing of candidates) {
-    const memberCounts = [...sizing.groupSizes, ...Array<number>(sizing.fullTime).fill(1)];
+  for (const { units, fairness } of candidates) {
     const strict = input.strictSwaps ?? false;
     const options = { pins, seed: input.seed, restarts: candidates.length > 1 ? 10 : 24 };
-    let result = optimise(outfield, outfieldSlots, memberCounts, matchMinutes, { ...options, strict: true });
+    let result = optimise(outfield, outfieldSlots, units, matchMinutes, { ...options, strict: true });
     if (!strict) {
       // Start the search that allows position changes from the like-for-like plan, so it is never worse.
-      result = optimise(outfield, outfieldSlots, memberCounts, matchMinutes, {
+      result = optimise(outfield, outfieldSlots, units, matchMinutes, {
         ...options,
         strict: false,
         initial: result.solved.map((r) => r.state),
       });
     }
-    const total = result.cost + fairnessCost(sizing, matchMinutes);
+    const total = result.cost + fairness;
     if (!best || total < best.total - 1e-9) best = { solved: result.solved, total };
   }
   const solutions = best!.solved;
   return buildPlan(input, matchMinutes, goalkeepers, goalkeeperIds, solutions);
+}
+
+/** The equally good ways to split the squad into groups for the chosen rotation, best first. */
+function groupLayouts(
+  rotation: Rotation,
+  slots: Slot[],
+  outfieldPlayers: number,
+  maxGroupSize: number,
+  matchMinutes: number,
+): { units: Unit[]; fairness: number }[] {
+  if (rotation === 'lines') {
+    const sizings = lineSizings(slots, outfieldPlayers, { maxGroupSize });
+    return sizings
+      .filter((s) => compareKeys(s.rank, sizings[0].rank) === 0)
+      .slice(0, MAX_CANDIDATES)
+      .map((s) => ({ units: s.groups.map((g) => ({ count: g.size, line: g.line })), fairness: 0 }));
+  }
+  const sizings = candidateSizings(outfieldPlayers, { maxGroupSize });
+  const fairest = fairnessCost(sizings[0], matchMinutes);
+  return sizings
+    .filter((s) => fairnessCost(s, matchMinutes) <= fairest + 1e-6)
+    .slice(0, MAX_CANDIDATES)
+    .map((s) => ({
+      units: [...s.groupSizes, ...Array<number>(s.fullTime).fill(1)].map((count) => ({ count })),
+      fairness: fairnessCost(s, matchMinutes),
+    }));
 }
 
 // --- search ---------------------------------------------------------------------------------
@@ -122,6 +158,8 @@ export function generatePlan(input: PlanInput): Plan {
 interface GroupState {
   members: Player[];
   slots: Slot[];
+  /** Line rotation: the group's slots all stay in this line. */
+  line?: Line;
 }
 
 function validatePins(pinned: Record<string, string>, formation: Formation, players: Player[]): void {
@@ -137,7 +175,7 @@ function validatePins(pinned: Record<string, string>, formation: Formation, play
 function optimise(
   players: Player[],
   slots: Slot[],
-  memberCounts: number[],
+  units: Unit[],
   matchMinutes: number,
   {
     pins,
@@ -164,11 +202,14 @@ function optimise(
   const rand = mulberry32(seed === undefined ? 1 : 1000 + seed);
   let best: { states: GroupState[]; cost: number } | undefined;
 
-  const restarts = restartsFor(Math.max(...memberCounts), baseRestarts);
+  const restarts = restartsFor(Math.max(...units.map((u) => u.count)), baseRestarts);
+  // With line rotation a slot may only move to another group in the same line.
+  const sameLine = (a: GroupState, b: GroupState) => a.line === b.line;
   for (let r = 0; r < restarts; r++) {
     // Slots in pitch order (attack to defence, left to right) for the first start, shuffled afterwards.
     const orderedSlots = [...slots].sort((a, b) => a.y - b.y || a.x - b.x);
     const slotPool = r === 0 ? orderedSlots : shuffle(slots, rand);
+    const taken = new Set<string>();
     // Pinned players start in the same group as their slot; everyone else fills the gaps.
     const playerById = new Map(players.map((p) => [p.id, p]));
     const free = shuffle(
@@ -176,22 +217,22 @@ function optimise(
       rand,
     );
     const states: GroupState[] = [];
-    let si = 0;
     // the first start can be a known good arrangement (e.g. the like-for-like plan)
     if (r === 0 && initial) {
-      states.push(...initial.map((g) => ({ slots: [...g.slots], members: [...g.members] })));
-      si = slots.length;
+      states.push(...initial.map((g) => ({ ...g, slots: [...g.slots], members: [...g.members] })));
     }
-    for (const count of r === 0 && initial ? [] : memberCounts) {
+    for (const { count, line } of r === 0 && initial ? [] : units) {
       const slotCount = count === 1 ? 1 : count - 1;
-      const groupSlots = slotPool.slice(si, si + slotCount);
-      si += slotCount;
+      const groupSlots = slotPool
+        .filter((s) => !taken.has(s.id) && (line === undefined || lineOf(s.role) === line))
+        .slice(0, slotCount);
+      groupSlots.forEach((s) => taken.add(s.id));
       const members = groupSlots.flatMap((s) => {
         const id = pins?.bySlot.get(s.id);
         return id === undefined ? [] : [playerById.get(id)!];
       });
       while (members.length < count) members.push(free.pop()!);
-      states.push({ slots: groupSlots, members });
+      states.push({ slots: groupSlots, members, line });
     }
     const costs = states.map((s) => evaluate(s).cost);
     let total = costs.reduce((a, b) => a + b, 0);
@@ -201,11 +242,11 @@ function optimise(
       improved = false;
       for (let a = 0; a < states.length; a++) {
         for (let b = a + 1; b < states.length; b++) {
-          const moves: ((x: GroupState, y: GroupState, i: number, j: number) => [GroupState, GroupState])[] = [
-            swapMembers,
-            swapSlots,
-          ];
-          if (pins) {
+          const slotsMayMove = sameLine(states[a], states[b]);
+          const moves: ((x: GroupState, y: GroupState, i: number, j: number) => [GroupState, GroupState])[] = slotsMayMove
+            ? [swapMembers, swapSlots]
+            : [swapMembers];
+          if (pins && slotsMayMove) {
             // A pinned slot only moves together with its pinned player.
             const tryMove = (na: GroupState, nb: GroupState) => {
               const ca = evaluate(na).cost;

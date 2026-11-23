@@ -92,18 +92,21 @@ Still open from the README status table: testing native sharing on a device, and
   - makes the plan in a deferred render (`useDeferredValue`) and shows "Updating the plan…" meanwhile
 
 - [x] **Performance budget test** (M / S). `src/core/performance.test.ts` fails when a worst-case squad (11–20
-  outfield players, pins, recalculate) takes more than 3 s, in both rotation modes. Tighten the budget once
+  outfield players, pins, recalculate) takes more than 1 s, in both rotation modes. Tighten the budget once
   the planner is faster.
-- [ ] **Make the "equal" rotation faster** (M / M). The default per-line rotation stays under 75 ms with random
-  ratings (Node on Apple silicon, JIT). The "equal" rotation, where groups span lines, takes 25–610 ms, and
-  **pinning three starters with 12 outfield players takes ~1.1 s**. A phone (Hermes, no JIT) is likely several
-  times slower. Starting points:
-  - the pin-aware moves in `optimise` try every slot × member combination
-  - 24 restarts when only one group sizing is a candidate
-  - the full `solveGroup` re-solve for every candidate swap
-
-  Then time `generatePlan` on a mid-range Android device. If it still blocks noticeably, move it off the JS thread
-  (a Web Worker on web).
+- [x] **Make the "equal" rotation faster** (M / M). Pinning three starters with 12 outfield players went from
+  ~1.1 s to ~190 ms, 12 outfield players from ~390 ms to ~80 ms, and the per-line rotation from up to 58 ms to
+  up to 38 ms (Node on Apple silicon, JIT). Plan quality is unchanged: on 972 reference squads the playing
+  minutes, minutes per rating level and position changes are identical; a few plans pick a different one of
+  equally good arrangements. Done by:
+  - reusing the strict solver's memo tables between calls instead of allocating ~100 KB per group
+  - skipping the second (position-change) search when no group can change positions, e.g. two groups of 6
+  - skipping candidate swaps whose cheap lower bound shows they cannot improve the plan, for groups that are
+    solved exactly
+- [ ] **Time the planner on a phone** (M / S). Time `generatePlan` on a mid-range Android device (Hermes, no JIT),
+  the "equal" rotation with pins first. If it still blocks noticeably, move it off the JS thread (a Web Worker on
+  web). The groups of 5 with position changes (13 outfield players, ~120 ms) are now the slowest unpinned case:
+  their solver only tries a few sit-out orders, so the lower-bound skip does not apply to them.
 
 ### Code quality and architecture
 

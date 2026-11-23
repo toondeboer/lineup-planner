@@ -5,12 +5,12 @@ import { ROLES, type Player, type Rating } from './types';
 
 /**
  * Guards against large slowdowns of the planner, which runs on the phone while the coach waits.
- * On a laptop the default line rotation stays under 100 ms here; the 'equal' rotation is much slower
- * (pinned starters with 12 outfield players take about a second), and a phone (Hermes, no JIT) is
- * slower still. The budget leaves room for slow CI machines but catches a
- * large regression; tighten it as the planner gets faster.
+ * On a laptop the default line rotation stays under 40 ms here and the 'equal' rotation under 200 ms
+ * (the slowest case is pinned starters with 12 outfield players); a phone (Hermes, no JIT) is slower
+ * still. The budget leaves room for slow CI machines but catches a large regression; tighten it as the
+ * planner gets faster.
  */
-const BUDGET_MS = 3000;
+const BUDGET_MS = 1000;
 
 /** Random ratings for every outfield position: the hardest case for the search. */
 function randomSquad(outfield: number, seed: number): Player[] {

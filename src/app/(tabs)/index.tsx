@@ -7,13 +7,15 @@ import { colors } from '../../ui/theme';
 
 export default function SquadScreen() {
   const squad = useStore((s) => s.squad);
+  const loadDemoSquad = useStore((s) => s.loadDemoSquad);
   return (
     <Screen>
       <Title>Squad</Title>
       <Muted>Add your players and rate how well they play each position.</Muted>
       {squad.length === 0 && (
         <Card>
-          <Muted>No players yet. Add your first player to get started.</Muted>
+          <Muted>No players yet. Add your first player to get started, or try the app with a demo team.</Muted>
+          <Button label="Load demo team (15 players)" kind="secondary" onPress={loadDemoSquad} />
         </Card>
       )}
       {squad.map((p) => (

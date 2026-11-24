@@ -93,3 +93,20 @@ test('share downloads a lineup image', async () => {
   assert.deepEqual([...fs.readFileSync(file).subarray(0, 4)], [0x89, 0x50, 0x4e, 0x47]);
   await page.close();
 });
+
+test('an empty squad can load the demo team and plan with it', async () => {
+  const page = await browser.newPage({ viewport: { width: 420, height: 900 } });
+  const errors = [];
+  page.on('pageerror', (e) => errors.push(e.message));
+  await page.goto(`${base}/`);
+  await page.getByRole('button', { name: 'Load demo team (15 players)' }).click();
+  await page.getByRole('button', { name: 'Edit Sam' }).waitFor();
+  assert.equal(await page.getByRole('button', { name: /^Edit / }).count(), 15);
+  // the button only shows for an empty squad
+  assert.equal(await page.getByRole('button', { name: 'Load demo team (15 players)' }).count(), 0);
+  await page.getByRole('tab', { name: 'Plan' }).click();
+  await page.waitForSelector('[aria-label="Slot GK"]');
+  assert.equal(await page.locator('[aria-label^="Slot "]').count(), 11);
+  assert.deepEqual(errors, []);
+  await page.close();
+});

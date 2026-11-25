@@ -28,6 +28,8 @@ interface Store {
   removePlayer: (id: string) => void;
   /** Fills an empty squad with 15 demo players, all available. Does nothing if the squad has players. */
   loadDemoSquad: () => void;
+  /** Removes every demo player (and them from the match); players added by the coach stay. */
+  removeDemoSquad: () => void;
   toggleAvailable: (id: string) => void;
   setAllAvailable: (available: boolean) => void;
   addGuest: (guest: Player, saveToSquad: boolean) => void;
@@ -84,6 +86,11 @@ export const useStore = create<Store>()(
             match: { ...s.match, availableIds: squad.map((p) => p.id), goalkeeperIds: [], pinned: {}, seed: 0 },
           };
         }),
+      removeDemoSquad: () =>
+        set((s) => ({
+          squad: s.squad.filter((p) => !p.isDemo),
+          match: s.squad.filter((p) => p.isDemo).reduce((match, p) => withoutPlayer(match, p.id), s.match),
+        })),
       toggleAvailable: (id) =>
         set((s) => {
           const on = s.match.availableIds.includes(id);

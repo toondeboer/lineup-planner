@@ -16,7 +16,8 @@ export default function PlayerScreen() {
   const [ratings, setRatings] = useState<Player['ratings']>(existing?.ratings ?? {});
 
   const save = () => {
-    upsert({ id, name: name.trim(), ratings, isGuest: existing?.isGuest });
+    // keep flags such as isGuest and isDemo
+    upsert({ ...existing, id, name: name.trim(), ratings });
     router.back();
   };
 

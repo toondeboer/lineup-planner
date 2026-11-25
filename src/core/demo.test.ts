@@ -15,6 +15,10 @@ describe('demoSquad', () => {
     expect(squad.filter((p) => p.ratings.GK === 3)).toHaveLength(1);
   });
 
+  it('marks every player as demo, so the team can be removed in one go', () => {
+    expect(demoSquad(makeId).every((p) => p.isDemo === true)).toBe(true);
+  });
+
   it('gives fresh ids on every call', () => {
     const a = demoSquad(makeId).map((p) => p.id);
     const b = demoSquad(makeId).map((p) => p.id);

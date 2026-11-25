@@ -30,7 +30,7 @@ const DEMO_PLAYERS: { name: string; ratings: Partial<Record<Role, Rating>> }[] =
   { name: 'Owen', ratings: { ...ratings(['ST'], ['RW', 'AM'], ['RM']), GK: 1 } },
 ];
 
-/** A 15-player demo squad to try the app with. `makeId` gives each player a fresh id. */
+/** A 15-player demo squad to try the app with, marked `isDemo`. `makeId` gives each player a fresh id. */
 export function demoSquad(makeId: () => string): Player[] {
-  return DEMO_PLAYERS.map((p) => ({ id: makeId(), name: p.name, ratings: { ...p.ratings } }));
+  return DEMO_PLAYERS.map((p) => ({ id: makeId(), name: p.name, ratings: { ...p.ratings }, isDemo: true }));
 }

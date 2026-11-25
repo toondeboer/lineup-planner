@@ -94,7 +94,7 @@ test('share downloads a lineup image', async () => {
   await page.close();
 });
 
-test('an empty squad can load the demo team and plan with it', async () => {
+test('an empty squad can load the demo team, plan with it and remove it', async () => {
   const page = await browser.newPage({ viewport: { width: 420, height: 900 } });
   const errors = [];
   page.on('pageerror', (e) => errors.push(e.message));
@@ -107,6 +107,11 @@ test('an empty squad can load the demo team and plan with it', async () => {
   await page.getByRole('tab', { name: 'Plan' }).click();
   await page.waitForSelector('[aria-label="Slot GK"]');
   assert.equal(await page.locator('[aria-label^="Slot "]').count(), 11);
+
+  await page.getByRole('tab', { name: 'Squad' }).click();
+  await page.getByRole('button', { name: 'Remove demo team' }).click();
+  await page.getByRole('button', { name: 'Load demo team (15 players)' }).waitFor();
+  assert.equal(await page.getByRole('button', { name: /^Edit / }).count(), 0);
   assert.deepEqual(errors, []);
   await page.close();
 });

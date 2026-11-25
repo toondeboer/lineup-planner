@@ -12,11 +12,29 @@ Parameters:
   AlertAmountUsd:
     Type: Number
     Default: 1
-    Description: Email an alert when the account's actual cost this month goes over this many USD.
+    Description: Email an alert when this app's actual cost this month goes over this many USD.
   AllowedOrigins:
     Type: CommaDelimitedList
     Default: http://localhost:8081
     Description: Web origins that may call the API, comma separated (the Vercel URL and the local dev server).
+  ReservedConcurrency:
+    Type: Number
+    Default: 0
+    MinValue: 0
+    Description: >
+      Lambda copies reserved for (and capping) this API; 0 = no reservation. Set to 5 once the account's
+      concurrency quota is above 10: AWS refuses a reservation that leaves the account fewer than 10.
+  CreateCostAlert:
+    Type: String
+    Default: 'true'
+    AllowedValues: ['true', 'false']
+    Description: >
+      Create a budget for the costs of resources tagged app=lineup-planner. Activate the tag "app" as a cost
+      allocation tag in the Billing console, or the budget sees no costs.
+
+Conditions:
+  Reserve: !Not [!Equals [!Ref ReservedConcurrency, 0]]
+  CostAlert: !Equals [!Ref CreateCostAlert, 'true']
 
 Resources:
   Table:
@@ -43,12 +61,18 @@ Resources:
         - AttributeName: sk
           KeyType: RANGE
       DeletionProtectionEnabled: true
+      Tags:
+        - Key: app
+          Value: lineup-planner
 
   ApiLogs:
     Type: AWS::Logs::LogGroup
     Properties:
       LogGroupName: /aws/lambda/lineup-planner-api
       RetentionInDays: 14
+      Tags:
+        - Key: app
+          Value: lineup-planner
 
   Api:
     Type: AWS::Serverless::Function
@@ -60,8 +84,10 @@ Resources:
       Architectures: [arm64]
       MemorySize: 256
       Timeout: 10
-      # At most 5 copies at once: caps what a flood of requests can cost.
-      ReservedConcurrentExecutions: 5
+      # Reserved copies cap what a flood of requests can use, so it can't starve the account's other functions.
+      ReservedConcurrentExecutions: !If [Reserve, !Ref ReservedConcurrency, !Ref AWS::NoValue]
+      Tags:
+        app: lineup-planner
       LoggingConfig:
         LogGroup: !Ref ApiLogs
       Environment:
@@ -92,6 +118,7 @@ Resources:
 
   CostAlert:
     Type: AWS::Budgets::Budget
+    Condition: CostAlert
     Properties:
       Budget:
         BudgetName: lineup-planner-cost-alert
@@ -100,6 +127,10 @@ Resources:
         BudgetLimit:
           Amount: !Ref AlertAmountUsd
           Unit: USD
+        # only this app's resources (tag app=lineup-planner), not the whole account
+        CostFilters:
+          TagKeyValue:
+            - user:app$lineup-planner
       NotificationsWithSubscribers:
         - Notification:
             NotificationType: ACTUAL

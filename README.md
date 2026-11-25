@@ -119,25 +119,32 @@ screen explains what is stored. Design and decisions: [docs/plans/shared-teams.m
 
 ### Deploy
 
-Needs the AWS CLI signed in to the account and the SAM CLI.
+Needs the AWS CLI and the SAM CLI, signed in as an IAM Identity Center or IAM user (not the root user).
 
-1. Check that no other DynamoDB tables in eu-central-1 use the free capacity (25 read and 25 write units are
-   shared by all tables in a region; this table takes 5 + 5):
-   `aws dynamodb list-tables --region eu-central-1`
-2. Build and deploy (the first time with `--guided`, which saves the answers to `samconfig.toml`, gitignored):
+1. Check that no other DynamoDB tables in eu-central-1 use **provisioned** capacity: the free 25 read and
+   25 write units are shared by all provisioned tables in a region, and this table takes 5 + 5.
+   On-demand tables don't count. `aws dynamodb list-tables --region eu-central-1`
+2. Check the account's Lambda concurrency in eu-central-1:
+   `aws lambda get-account-settings --region eu-central-1 --query AccountLimit`. If it is 10 (common on
+   newer accounts), request the default of 1000 in the Service Quotas console (Lambda, "Concurrent
+   executions", eu-central-1; free). Until then deploy with `ReservedConcurrency=0`; afterwards redeploy with
+   `ReservedConcurrency=5`, which caps the API and keeps a flood of requests from starving other functions.
+3. Build and deploy (the first time with `--guided`, which saves the answers to `samconfig.toml`, gitignored):
 
    ```bash
    npm --prefix server ci
    npm --prefix server run build
    sam deploy --guided --template-file infra/template.yaml --stack-name lineup-planner \
-     --region eu-central-1 --capabilities CAPABILITY_IAM --resolve-s3
+     --region eu-central-1 --capabilities CAPABILITY_IAM --resolve-s3 --tags app=lineup-planner
    ```
 
-   Parameters: `AlertEmail` (monthly cost alert, account-wide), `AlertAmountUsd` (default 1) and
-   `AllowedOrigins` (the Vercel URL plus `http://localhost:8081`, comma separated).
-3. Check the live API (creates two test teams and deletes them again):
+   Parameters: `AlertEmail`, `AlertAmountUsd` (default 1), `AllowedOrigins` (the Vercel URL plus
+   `http://localhost:8081`, comma separated), `ReservedConcurrency` (see step 2) and `CreateCostAlert`.
+4. Cost alert: the budget only counts resources tagged `app=lineup-planner`. Activate `app` once under
+   Billing > Cost allocation tags (it shows up there about a day after the first deploy).
+5. Check the live API (creates two test teams and deletes them again):
    `API_URL=<ApiUrl output> ORIGIN=<Vercel URL> node server/scripts/smoke.mjs`
-4. Put the `ApiUrl` output in `EXPO_PUBLIC_API_URL`, in a local `.env` and in Vercel's environment variables
+6. Put the `ApiUrl` output in `EXPO_PUBLIC_API_URL`, in a local `.env` and in Vercel's environment variables
    (Expo builds it into the bundle, so Vercel needs it at build time). Without it the app stays local-only
    and hides sharing. For the iOS and Android apps, also set `EXPO_PUBLIC_WEB_URL` to the Vercel URL, so
    invite links they share open in a browser; on the web the site's own address is used.

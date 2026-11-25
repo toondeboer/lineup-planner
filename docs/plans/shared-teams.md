@@ -28,8 +28,9 @@ People who never share keep using the app exactly as they do today: local only, 
 
 **Expected cost: $0 a month.** Two safety nets are part of the infrastructure template:
 
-- An AWS Budget with an email alert at **$1**.
-- A cap of **5 concurrent copies** of the Lambda function.
+- An AWS Budget with an email alert at **$1**, counting only resources tagged `app=lineup-planner`.
+- A cap of **5 concurrent copies** of the Lambda function (`ReservedConcurrency`; needs an account concurrency
+  quota above 10, so it is 0 until the quota is raised).
 
 Charges beyond the free allowances would be tiny anyway: $0.20 per extra million Lambda requests, and
 DynamoDB can't grow its bill from traffic because its capacity is fixed.

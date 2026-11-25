@@ -82,14 +82,14 @@ another team.
 
 ```
 server/                      own package.json, so AWS SDK code stays out of the app bundle
-  src/handler.ts             Lambda entry, router, CORS, error mapping
+  src/api.ts                 router, routes and error mapping (pure: request in, response out)
+  src/lambda.ts              function URL adapter; CORS is configured on the function URL
   src/auth.ts                token creation and hashing, invite codes (crypto.randomBytes)
-  src/repo.ts                interface for the table operations above
+  src/model.ts               item types and the Repo interface for the table operations above
   src/dynamoRepo.ts          DynamoDB implementation (@aws-sdk/lib-dynamodb)
   src/memoryRepo.ts          in-memory implementation for tests
-  src/routes/*.ts            one file per group of routes
   src/validate.ts
-  test/*.test.ts             vitest: every route against memoryRepo, including access-denied cases
+  test/*.test.ts             vitest (run by the root `npm test`): every route against MemoryRepo, incl. access denied
 infra/template.yaml          AWS SAM: table, function + URL, cap of 5 copies, budget alert, outputs the URL
 src/sync/api.ts              typed fetch client; EXPO_PUBLIC_API_URL; isCloudEnabled()
 src/sync/diff.ts             pure: previous/next store state -> player upserts/deletes, changed match fields

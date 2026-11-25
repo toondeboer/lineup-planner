@@ -11,3 +11,4 @@ export * from './guests';
 export * from './summary';
 export * from './format';
 export * from './demo';
+export * from './match';

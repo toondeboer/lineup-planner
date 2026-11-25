@@ -7,13 +7,23 @@ import { colors } from '../../ui/theme';
 
 export default function SquadScreen() {
   const squad = useStore((s) => s.squad);
+  const loadDemoSquad = useStore((s) => s.loadDemoSquad);
+  const removeDemoSquad = useStore((s) => s.removeDemoSquad);
+  const hasDemo = squad.some((p) => p.isDemo);
   return (
     <Screen>
       <Title>Squad</Title>
       <Muted>Add your players and rate how well they play each position.</Muted>
+      {hasDemo && (
+        <Card>
+          <Muted>You're trying the app with the demo team. Remove it to start with your own players.</Muted>
+          <Button label="Remove demo team" kind="danger" onPress={removeDemoSquad} />
+        </Card>
+      )}
       {squad.length === 0 && (
         <Card>
-          <Muted>No players yet. Add your first player to get started.</Muted>
+          <Muted>No players yet. Add your first player to get started, or try the app with a demo team.</Muted>
+          <Button label="Load demo team (15 players)" kind="secondary" onPress={loadDemoSquad} />
         </Card>
       )}
       {squad.map((p) => (
@@ -30,6 +40,7 @@ export default function SquadScreen() {
                 <Muted>{roleSummary(p)}</Muted>
               </View>
               {p.isGuest && <Muted>guest</Muted>}
+              {p.isDemo && <Muted>demo</Muted>}
             </Row>
           </Card>
         </Pressable>

@@ -24,6 +24,8 @@ export interface Player {
   name: string;
   ratings: Partial<Record<Role, Rating>>;
   isGuest?: boolean;
+  /** Part of the demo team, so it can be removed in one go. */
+  isDemo?: boolean;
 }
 
 export interface Slot {

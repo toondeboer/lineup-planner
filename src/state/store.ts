@@ -1,7 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
-import type { Player, Rotation } from '../core';
+import { demoSquad, type Player, type Rotation } from '../core';
 
 export interface MatchState {
   /** Ids of squad members who are available for this match. */
@@ -26,6 +26,10 @@ interface Store {
   match: MatchState;
   upsertPlayer: (player: Player) => void;
   removePlayer: (id: string) => void;
+  /** Fills an empty squad with 15 demo players, all available. Does nothing if the squad has players. */
+  loadDemoSquad: () => void;
+  /** Removes every demo player (and them from the match); players added by the coach stay. */
+  removeDemoSquad: () => void;
   toggleAvailable: (id: string) => void;
   setAllAvailable: (available: boolean) => void;
   addGuest: (guest: Player, saveToSquad: boolean) => void;
@@ -71,6 +75,21 @@ export const useStore = create<Store>()(
         set((s) => ({
           squad: s.squad.filter((p) => p.id !== id),
           match: withoutPlayer(s.match, id),
+        })),
+      loadDemoSquad: () =>
+        set((s) => {
+          if (s.squad.length > 0) return {};
+          const squad = demoSquad(newId);
+          return {
+            squad,
+            // keep the match settings (formation, rotation, guests); start from a clean lineup
+            match: { ...s.match, availableIds: squad.map((p) => p.id), goalkeeperIds: [], pinned: {}, seed: 0 },
+          };
+        }),
+      removeDemoSquad: () =>
+        set((s) => ({
+          squad: s.squad.filter((p) => !p.isDemo),
+          match: s.squad.filter((p) => p.isDemo).reduce((match, p) => withoutPlayer(match, p.id), s.match),
         })),
       toggleAvailable: (id) =>
         set((s) => {

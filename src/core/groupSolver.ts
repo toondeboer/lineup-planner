@@ -114,41 +114,67 @@ function solveStrict(
 
   const p = slots.length;
   const stride = p + 1;
-  const states = (1 << g) * (1 << p) * stride;
-  const memoCost = new Float64Array(states).fill(-1);
-  const memoPick = new Int8Array(states);
-  const memoNext = new Int8Array(states);
+  const memo = strictMemo((1 << g) * (1 << p) * stride);
+  const { cost: memoCost, pick: memoPick, next: memoNext, stamp } = memo;
+  const generation = memo.generation;
   const index = (memberMask: number, slotMask: number, slotK: number) =>
     ((memberMask << p) | slotMask) * stride + slotK + 1;
+
+  // Flat lookup tables for the hot loop, with the same arithmetic as pricing each step directly.
+  // ownCost[(k * g + m) * p + s]: member m playing slot s until sitting out segment k (k >= 1),
+  // including a broken pin. afterCost[same index]: member m playing slot s after segment k.
+  const ownCost = new Float64Array(g * g * p);
+  const afterCost = new Float64Array(g * g * p);
+  for (let k = 0; k < g; k++) {
+    for (let m = 0; m < g; m++) {
+      for (let s = 0; s < p; s++) {
+        const i = (k * g + m) * p + s;
+        ownCost[i] = before[k] * pen[m][s] + (violates(pins, members[m], slots[s]) ? PIN_VIOLATION : 0);
+        afterCost[i] = after[k] * pen[m][s];
+      }
+    }
+  }
+  // Pinned players start on the pitch, in their pinned slot.
+  const benchStart = members.map((member) => (pins?.byPlayer.has(member.id) ? PIN_VIOLATION : 0));
 
   // Choose the member who sits out segment k, given the slot `slotK` they play before that.
   const solve = (k: number, memberMask: number, slotMask: number, slotK: number): number => {
     const key = index(memberMask, slotMask, slotK);
-    if (memoCost[key] >= 0) return memoCost[key];
-    let best = { cost: Infinity, pick: -1, next: -1 };
+    if (stamp[key] === generation) return memoCost[key];
+    let bestCost = Infinity;
+    let bestPick = -1;
+    let bestNext = -1;
     for (let m = 0; m < g; m++) {
       if (memberMask & (1 << m)) continue;
-      // Pinned players start on the pitch, in their pinned slot.
-      const own =
-        k === 0
-          ? pins?.byPlayer.has(members[m].id)
-            ? PIN_VIOLATION
-            : 0
-          : before[k] * pen[m][slotK] + (violates(pins, members[m], slots[slotK]) ? PIN_VIOLATION : 0);
+      const row = (k * g + m) * p;
+      const own = k === 0 ? benchStart[m] : ownCost[row + slotK];
       if (k === g - 1) {
-        if (own < best.cost) best = { cost: own, pick: m, next: -1 };
+        if (own < bestCost) {
+          bestCost = own;
+          bestPick = m;
+          bestNext = -1;
+        }
         continue;
       }
-      for (let t = 0; t < slots.length; t++) {
+      const nextMembers = memberMask | (1 << m);
+      for (let t = 0; t < p; t++) {
         if (slotMask & (1 << t)) continue;
-        const cost = own + after[k] * pen[m][t] + solve(k + 1, memberMask | (1 << m), slotMask | (1 << t), t);
-        if (cost < best.cost) best = { cost, pick: m, next: t };
+        const nextSlots = slotMask | (1 << t);
+        const child = index(nextMembers, nextSlots, t);
+        const rest = stamp[child] === generation ? memoCost[child] : solve(k + 1, nextMembers, nextSlots, t);
+        const cost = own + afterCost[row + t] + rest;
+        if (cost < bestCost) {
+          bestCost = cost;
+          bestPick = m;
+          bestNext = t;
+        }
       }
     }
-    memoCost[key] = best.cost;
-    memoPick[key] = best.pick;
-    memoNext[key] = best.next;
-    return best.cost;
+    stamp[key] = generation;
+    memoCost[key] = bestCost;
+    memoPick[key] = bestPick;
+    memoNext[key] = bestNext;
+    return bestCost;
   };
 
   const rating = solve(0, 0, 0, -1);
@@ -183,6 +209,49 @@ function solveStrict(
     assignments.push(onPitch);
   }
   return { cost: rating, order, assignments };
+}
+
+/**
+ * Memo tables for `solveStrict`, reused between calls: the planner solves thousands of groups per
+ * plan, and allocating fresh tables (~100 KB for a group of 6) each time was a large share of the run
+ * time. An entry is valid only when
+ * its stamp equals the current generation, so nothing needs clearing between calls.
+ */
+const memoTables = {
+  cost: new Float64Array(0),
+  pick: new Int8Array(0),
+  next: new Int8Array(0),
+  stamp: new Uint32Array(0),
+  generation: 0,
+};
+
+function strictMemo(size: number): typeof memoTables {
+  if (memoTables.cost.length < size) {
+    memoTables.cost = new Float64Array(size);
+    memoTables.pick = new Int8Array(size);
+    memoTables.next = new Int8Array(size);
+    memoTables.stamp = new Uint32Array(size);
+    memoTables.generation = 0;
+  }
+  memoTables.generation++;
+  if (memoTables.generation === 0xffffffff) {
+    memoTables.stamp.fill(0);
+    memoTables.generation = 1;
+  }
+  return memoTables;
+}
+
+/** Whether a group of this size is solved with like-for-like swaps only (see `SolveOptions.strict`). */
+export function solvesStrictly(groupSize: number, strict: boolean | undefined): boolean {
+  return Boolean(strict) || groupSize === 1 || groupSize > MAX_FLEXIBLE_GROUP;
+}
+
+/**
+ * Whether `solveGroup` finds the optimum for a group of this size. Its cost then does not depend on
+ * the order the members and slots are passed in. (Larger flexible groups only try a few sit-out orders.)
+ */
+export function solvesExactly(groupSize: number, strict: boolean | undefined): boolean {
+  return solvesStrictly(groupSize, strict) || groupSize <= MAX_ORDER_SEARCH;
 }
 
 export function cohesionCost(slots: Slot[], matchMinutes: number): number {

@@ -28,7 +28,7 @@ function FitSummary({ fit }: { fit: Plan['fit'] }) {
 }
 
 export default function PlanScreen() {
-  const { plan, error, formation, players } = usePlan();
+  const { plan, error, formation, players, pending } = usePlan();
   const pinned = useStore((s) => s.match.pinned);
   const pin = useStore((s) => s.pin);
   const clearPins = useStore((s) => s.clearPins);
@@ -40,7 +40,13 @@ export default function PlanScreen() {
       <Screen>
         <Title>Plan</Title>
         <Card>
-          <Muted>{players.length < 11 ? `Select at least 11 players on the Match tab (now ${players.length}).` : (error ?? '')}</Muted>
+          <Muted>
+            {pending
+              ? 'Making the plan…'
+              : players.length < 11
+                ? `Select at least 11 players on the Match tab (now ${players.length}).`
+                : (error ?? '')}
+          </Muted>
         </Card>
       </Screen>
     );
@@ -74,9 +80,13 @@ export default function PlanScreen() {
   return (
     <Screen>
       <Title>Plan</Title>
-      <Pitch formation={formation} markers={markers} selectedSlot={selected} onSlotPress={(s) => setSelected(s === selected ? undefined : s)} />
+      <View style={{ opacity: pending ? 0.5 : 1 }}>
+        <Pitch formation={formation} markers={markers} selectedSlot={selected} onSlotPress={(s) => setSelected(s === selected ? undefined : s)} />
+      </View>
       <Muted>
-        Colours show rotation groups. Tap a position to choose who starts there; substitutions are recalculated.
+        {pending
+          ? 'Updating the plan…'
+          : 'Colours show rotation groups. Tap a position to choose who starts there; substitutions are recalculated.'}
       </Muted>
 
       {selected && (

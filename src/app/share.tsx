@@ -9,14 +9,14 @@ import { Pitch, type PitchMarker } from '../ui/Pitch';
 import { colors, groupColors } from '../ui/theme';
 
 export default function ShareScreen() {
-  const { plan, formation, players } = usePlan();
+  const { plan, formation, players, pending } = usePlan();
   const svgRef = useRef<Svg | null>(null);
   const [status, setStatus] = useState('');
 
   if (!plan) {
     return (
       <Screen>
-        <Muted>Make a plan first.</Muted>
+        <Muted>{pending ? 'Making the plan…' : 'Make a plan first.'}</Muted>
       </Screen>
     );
   }

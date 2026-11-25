@@ -1,8 +1,17 @@
-import { rating } from './fit';
+import { penalty, rating } from './fit';
 import { planGoalkeepers } from './goalkeepers';
 import { candidateSizings, compareKeys, fairnessCost, OUTFIELD_SLOTS, DEFAULT_MAX_GROUP_SIZE } from './groups';
 import { lineOf, lineSizings, type Line } from './lines';
-import { MAX_SOLVABLE_GROUP, PIN_VIOLATION, makePins, solveGroup, type GroupSolution, type Pins } from './groupSolver';
+import {
+  MAX_SOLVABLE_GROUP,
+  PIN_VIOLATION,
+  makePins,
+  solveGroup,
+  solvesExactly,
+  solvesStrictly,
+  type GroupSolution,
+  type Pins,
+} from './groupSolver';
 import type { Plan, PlanGroup, PlanWarning, PositionChange, Substitution } from './plan';
 import { lineupAt, slotGoalkeeper } from './plan';
 import type { Formation, Player, Slot } from './types';
@@ -112,7 +121,10 @@ export function generatePlan(input: PlanInput): Plan {
     const strict = input.strictSwaps ?? false;
     const options = { pins, seed: input.seed, restarts: candidates.length > 1 ? 10 : 24 };
     let result = optimise(outfield, outfieldSlots, units, matchMinutes, { ...options, strict: true });
-    if (!strict) {
+    // When no group can make position changes (e.g. two groups of 6 with 12 outfield players), the
+    // second search can only find an equally good plan again, so skip it.
+    const flexible = units.some((u) => !solvesStrictly(u.count, false));
+    if (!strict && flexible) {
       // Start the search that allows position changes from the like-for-like plan, so it is never worse.
       result = optimise(outfield, outfieldSlots, units, matchMinutes, {
         ...options,
@@ -199,6 +211,47 @@ function optimise(
     return hit;
   };
 
+  // A cheap lower bound on a group's cost, to skip swaps that cannot be an improvement without
+  // solving the groups. Each member plays at least `matchMinutes - longest segment` minutes, each at
+  // no less than their cheapest slot in the group; a pin that cannot be kept adds a violation.
+  const playerIndex = new Map(players.map((p, i) => [p.id, i]));
+  const slotIndex = new Map(slots.map((s, i) => [s.id, i]));
+  const penTable = new Float64Array(players.length * slots.length);
+  players.forEach((p, i) =>
+    slots.forEach((s, j) => {
+      // the same per-minute cost as solveGroup
+      penTable[i * slots.length + j] = penalty(p, s.role) + (jitter?.(p.id, s.id) ?? 0);
+    }),
+  );
+  const minMinutes = new Map<number, number>();
+  const lowerBound = (state: GroupState): number => {
+    const g = state.members.length;
+    let played = minMinutes.get(g);
+    if (played === undefined) {
+      played = g === 1 ? matchMinutes : matchMinutes - Math.max(...segmentLengths(g, matchMinutes));
+      minMinutes.set(g, played);
+    }
+    let total = 0;
+    for (const m of state.members) {
+      const row = playerIndex.get(m.id)! * slots.length;
+      let cheapest = Infinity;
+      for (const s of state.slots) cheapest = Math.min(cheapest, penTable[row + slotIndex.get(s.id)!]);
+      total += cheapest;
+    }
+    return played * total + (pins && breaksPin(state, pins) ? PIN_VIOLATION : 0);
+  };
+  /**
+   * True when the swap to (na, nb) certainly cannot lower the cost of groups a and b, so it need not be
+   * solved. Only used for groups solved exactly: their cost does not depend on member order, so skipping
+   * a solve never changes which moves the search makes.
+   */
+  const cannotImprove = (na: GroupState, nb: GroupState, current: number): boolean => {
+    if (!solvesExactly(na.members.length, strict) || !solvesExactly(nb.members.length, strict)) return false;
+    const bound = lowerBound(na) + lowerBound(nb);
+    // The relative margin absorbs floating-point rounding, so a real improvement is never skipped.
+    return bound >= current + 1e-9 * Math.max(1, Math.abs(current));
+  };
+
   const rand = mulberry32(seed === undefined ? 1 : 1000 + seed);
   let best: { states: GroupState[]; cost: number } | undefined;
 
@@ -249,6 +302,7 @@ function optimise(
           if (pins && slotsMayMove) {
             // A pinned slot only moves together with its pinned player.
             const tryMove = (na: GroupState, nb: GroupState) => {
+              if (cannotImprove(na, nb, costs[a] + costs[b])) return;
               const ca = evaluate(na).cost;
               const cb = evaluate(nb).cost;
               if (ca + cb < costs[a] + costs[b] - 1e-9) {
@@ -284,6 +338,7 @@ function optimise(
             for (let i = 0; i < sizeA; i++) {
               for (let j = 0; j < sizeB; j++) {
                 const [na, nb] = move(states[a], states[b], i, j);
+                if (cannotImprove(na, nb, costs[a] + costs[b])) continue;
                 const ca = evaluate(na).cost;
                 const cb = evaluate(nb).cost;
                 if (ca + cb < costs[a] + costs[b] - 1e-9) {
@@ -305,6 +360,19 @@ function optimise(
 
   if (best!.cost >= PIN_VIOLATION) throw new Error('Could not plan around the pinned starters');
   return { solved: best!.states.map((state) => ({ state, solution: evaluate(state) })), cost: best!.cost };
+}
+
+/** Whether every way of playing this group breaks a pin: a pinned member without their slot, or a pinned slot without its player. */
+function breaksPin(state: GroupState, pins: Pins): boolean {
+  for (const m of state.members) {
+    const slotId = pins.byPlayer.get(m.id);
+    if (slotId !== undefined && !state.slots.some((s) => s.id === slotId)) return true;
+  }
+  for (const s of state.slots) {
+    const playerId = pins.bySlot.get(s.id);
+    if (playerId !== undefined && !state.members.some((m) => m.id === playerId)) return true;
+  }
+  return false;
 }
 
 function swapMembers(a: GroupState, b: GroupState, i: number, j: number): [GroupState, GroupState] {

@@ -68,6 +68,7 @@ function StartSharing() {
         <TextField label="Team name, e.g. JO17-1" value={teamName} onChangeText={setTeamName} maxLength={60} />
         <TextField label="Your name" value={yourName} onChangeText={setYourName} maxLength={40} autoComplete="name" />
         <Muted>{PRIVACY}</Muted>
+        <Button label="Privacy: what is shared" kind="secondary" onPress={() => router.push('/privacy')} />
         <Button
           label={busy ? 'Creating…' : 'Create shared team'}
           onPress={create}
@@ -133,6 +134,7 @@ function SharedTeam() {
           {link}
         </Text>
         <Muted>{PRIVACY}</Muted>
+        <Button label="Privacy: what is shared" kind="secondary" onPress={() => router.push('/privacy')} />
         <Button label="Share link" onPress={run(async () => ((await shareText(message)) === 'copied' ? 'Link copied.' : ''))} />
         <Button label="Copy link" kind="secondary" onPress={run(async () => { await copyText(link); return 'Link copied.'; })} />
         <ConfirmButton

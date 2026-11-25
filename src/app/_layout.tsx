@@ -14,6 +14,7 @@ export default function RootLayout() {
         <Stack.Screen name="player/[id]" options={{ presentation: 'modal', title: 'Player' }} />
         <Stack.Screen name="team" options={{ presentation: 'modal', title: 'Team' }} />
         <Stack.Screen name="join/[code]" options={{ title: 'Join team' }} />
+        <Stack.Screen name="privacy" options={{ presentation: 'modal', title: 'Privacy' }} />
       </Stack>
     </>
   );

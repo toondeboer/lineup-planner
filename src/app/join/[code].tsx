@@ -82,6 +82,7 @@ export default function JoinScreen() {
         {error ? <Notice error>{error}</Notice> : null}
       </Card>
       <Button label="Cancel" kind="secondary" onPress={home} />
+      <Button label="Privacy: what is shared" kind="secondary" onPress={() => router.push('/privacy')} />
     </Screen>
   );
 }

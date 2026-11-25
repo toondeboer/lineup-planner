@@ -76,8 +76,9 @@ their minutes (`formatShareMessage` in `src/core/format.ts`).
 
 ## Deploying the web app (Vercel)
 
-`vercel.json` is set up for a static deploy: it builds with `npx expo export --platform web`,
-serves `dist/`, and rewrites unknown paths to `index.html` so refreshing `/plan` works.
+`vercel.json` is set up for a static deploy: it builds with `npx expo export --platform web --clear`,
+serves `dist/`, and rewrites unknown paths to `index.html` so refreshing `/plan` and invite links
+(`/join/<code>`) work. `--clear` matters: Metro's cache can keep an `EXPO_PUBLIC_` value from an earlier build.
 
 1. In Vercel choose **Add New > Project** and import this GitHub repository (free Hobby plan).
 2. Keep the detected settings (they come from `vercel.json`) and deploy.
@@ -85,7 +86,8 @@ serves `dist/`, and rewrites unknown paths to `index.html` so refreshing `/plan`
 
 Or from a terminal: `npx vercel` (preview) / `npx vercel --prod`.
 
-Squad data is stored in the browser's local storage, so each browser starts with an empty squad.
+Squad data is stored in the browser's local storage, so each browser starts with an empty squad, unless
+the coach joins a shared team (below).
 
 ## Status
 
@@ -99,14 +101,21 @@ Squad data is stored in the browser's local storage, so each browser starts with
 | M5 Plan screen | done |
 | M6 WhatsApp sharing | done (device test pending) |
 | M7 Web smoke test (e2e) | done |
+| M8 Shared teams (invite link, sync, AWS backend) | built; deploy and device test pending |
 | Device test of native share, lint config | open |
 
-## Shared teams backend (AWS)
+## Shared teams
 
-Coaches can share a team through a secret invite link (work in progress, see
-[docs/plans/shared-teams.md](docs/plans/shared-teams.md)). The backend in `server/` is one Lambda function behind
-a function URL, on one DynamoDB table in eu-central-1, sized to stay within the AWS free allowances. The
-infrastructure is in [infra/template.yaml](infra/template.yaml) (AWS SAM).
+Coaches can share their squad: **Share with your coaches** on the Squad tab creates a team and an invite link
+(`/join/<code>`). Everyone who joins can edit the players, ratings and the upcoming match. There are no
+accounts: each phone gets a secret member token when it joins. Edits are saved in the background (offline
+edits are kept and saved later) and other coaches' changes arrive within about 15 seconds. The in-app Privacy
+screen explains what is stored. Design and decisions: [docs/plans/shared-teams.md](docs/plans/shared-teams.md).
+
+- `server/`: the API, one Lambda function behind a function URL, on one DynamoDB table in eu-central-1, sized
+  to stay within the AWS free allowances. Infrastructure: [infra/template.yaml](infra/template.yaml) (AWS SAM).
+- `src/sync/`: the app side: API client, the sync engine (`engine.ts`, pure and tested in Node) and its hook.
+- Builds without `EXPO_PUBLIC_API_URL` are local-only and hide sharing.
 
 ### Deploy
 
@@ -153,6 +162,7 @@ npm --prefix server install   # the shared-teams server (needed for the typechec
 npm test            # unit tests for the core module and the server (vitest)
 npm run typecheck
 npm run e2e         # export the web build and run the Playwright smoke test (needs Chromium)
+npm run e2e:sharing # two coaches sharing a team in the browser, against the local API
 npm run web         # start the Expo dev server for web (also: npm run ios / android)
 ```
 

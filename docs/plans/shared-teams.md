@@ -1,6 +1,7 @@
 # Plan: shared teams (AWS: DynamoDB + Lambda, invite link)
 
-_Status: draft, 2026-11-25. Covers the ROADMAP item "Cloud sync and shared squads"._
+_Status: built (steps 1–6) on branch `claude/shared-teams`, 2026-11-25; not deployed yet. Covers the ROADMAP item
+"Cloud sync and shared squads"._
 
 ## Goal
 

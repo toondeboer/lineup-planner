@@ -40,7 +40,11 @@ export function useSync() {
     const unsubscribe = useStore.subscribe((next, prev) => {
       if (next.team && next.team.id !== prev.team?.id) syncIfShared();
     });
+    // in a browser, save offline edits as soon as the connection is back instead of at the next retry
+    const online = typeof window !== 'undefined' && typeof window.addEventListener === 'function';
+    if (online) window.addEventListener('online', syncIfShared);
     return () => {
+      if (online) window.removeEventListener('online', syncIfShared);
       clearInterval(timer);
       appState.remove();
       unsubscribe();

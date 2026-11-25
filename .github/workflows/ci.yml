@@ -26,6 +26,8 @@ jobs:
       - run: npm ci
       - run: npx playwright install --with-deps chromium
       - run: npm run e2e
+      - run: npm ci --prefix server
+      - run: npm run e2e:sharing
   server-dynamodb:
     # the API tests again, on DynamoDB Local instead of the in-memory store
     runs-on: ubuntu-latest

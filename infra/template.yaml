@@ -1,0 +1,118 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  Lineup Planner shared teams: one DynamoDB table and one Lambda function behind a function URL.
+  Sized to stay within the AWS free allowances. Build the code first: npm --prefix server run build
+
+Parameters:
+  AlertEmail:
+    Type: String
+    Description: Email address for the monthly cost alert.
+    AllowedPattern: '.+@.+\..+'
+  AlertAmountUsd:
+    Type: Number
+    Default: 1
+    Description: Email an alert when the account's actual cost this month goes over this many USD.
+  AllowedOrigins:
+    Type: CommaDelimitedList
+    Default: http://localhost:8081
+    Description: Web origins that may call the API, comma separated (the Vercel URL and the local dev server).
+
+Resources:
+  Table:
+    Type: AWS::DynamoDB::Table
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      TableName: lineup-planner
+      TableClass: STANDARD
+      # Provisioned (not on-demand) capacity: the free allowance covers 25 RCU / 25 WCU per region,
+      # and fixed capacity throttles a traffic spike instead of billing it. No auto scaling.
+      BillingMode: PROVISIONED
+      ProvisionedThroughput:
+        ReadCapacityUnits: 5
+        WriteCapacityUnits: 5
+      AttributeDefinitions:
+        - AttributeName: pk
+          AttributeType: S
+        - AttributeName: sk
+          AttributeType: S
+      KeySchema:
+        - AttributeName: pk
+          KeyType: HASH
+        - AttributeName: sk
+          KeyType: RANGE
+      DeletionProtectionEnabled: true
+
+  ApiLogs:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: /aws/lambda/lineup-planner-api
+      RetentionInDays: 14
+
+  Api:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: lineup-planner-api
+      CodeUri: ../server/dist
+      Handler: index.handler
+      Runtime: nodejs24.x
+      Architectures: [arm64]
+      MemorySize: 256
+      Timeout: 10
+      # At most 5 copies at once: caps what a flood of requests can cost.
+      ReservedConcurrentExecutions: 5
+      LoggingConfig:
+        LogGroup: !Ref ApiLogs
+      Environment:
+        Variables:
+          TABLE_NAME: !Ref Table
+          NODE_OPTIONS: --enable-source-maps
+      Policies:
+        - Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Action:
+                - dynamodb:GetItem
+                - dynamodb:PutItem
+                - dynamodb:UpdateItem
+                - dynamodb:DeleteItem
+                - dynamodb:ConditionCheckItem
+                - dynamodb:Query
+                - dynamodb:BatchWriteItem
+              Resource: !GetAtt Table.Arn
+      # Public URL; the API checks member tokens itself. SAM adds the permissions that let anyone call it.
+      FunctionUrlConfig:
+        AuthType: NONE
+        Cors:
+          AllowOrigins: !Ref AllowedOrigins
+          AllowMethods: [GET, POST, PUT, PATCH, DELETE]
+          AllowHeaders: [authorization, content-type]
+          MaxAge: 600
+
+  CostAlert:
+    Type: AWS::Budgets::Budget
+    Properties:
+      Budget:
+        BudgetName: lineup-planner-cost-alert
+        BudgetType: COST
+        TimeUnit: MONTHLY
+        BudgetLimit:
+          Amount: !Ref AlertAmountUsd
+          Unit: USD
+      NotificationsWithSubscribers:
+        - Notification:
+            NotificationType: ACTUAL
+            ComparisonOperator: GREATER_THAN
+            Threshold: 100
+            ThresholdType: PERCENTAGE
+          Subscribers:
+            - SubscriptionType: EMAIL
+              Address: !Ref AlertEmail
+
+Outputs:
+  ApiUrl:
+    Description: Put this in EXPO_PUBLIC_API_URL (local .env and Vercel).
+    Value: !GetAtt ApiUrl.FunctionUrl
+  TableName:
+    Value: !Ref Table

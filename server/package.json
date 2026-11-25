@@ -1,0 +1,16 @@
+{
+  "name": "lineup-planner-server",
+  "private": true,
+  "description": "Shared-teams API: one AWS Lambda function (function URL) on DynamoDB.",
+  "scripts": {
+    "build": "esbuild src/index.ts --bundle --platform=node --target=node24 --format=cjs --outfile=dist/index.js --minify --sourcemap --legal-comments=none",
+    "dev": "esbuild src/dev.ts --bundle --platform=node --target=node24 --format=esm --packages=external --outfile=dist-dev/dev.mjs --log-level=warning && node dist-dev/dev.mjs"
+  },
+  "dependencies": {
+    "@aws-sdk/client-dynamodb": "^3.1177.0",
+    "@aws-sdk/lib-dynamodb": "^3.1177.0"
+  },
+  "devDependencies": {
+    "esbuild": "^0.28.2"
+  }
+}

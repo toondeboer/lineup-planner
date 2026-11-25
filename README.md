@@ -101,11 +101,53 @@ Squad data is stored in the browser's local storage, so each browser starts with
 | M7 Web smoke test (e2e) | done |
 | Device test of native share, lint config | open |
 
+## Shared teams backend (AWS)
+
+Coaches can share a team through a secret invite link (work in progress, see
+[docs/plans/shared-teams.md](docs/plans/shared-teams.md)). The backend in `server/` is one Lambda function behind
+a function URL, on one DynamoDB table in eu-central-1, sized to stay within the AWS free allowances. The
+infrastructure is in [infra/template.yaml](infra/template.yaml) (AWS SAM).
+
+### Deploy
+
+Needs the AWS CLI signed in to the account and the SAM CLI.
+
+1. Check that no other DynamoDB tables in eu-central-1 use the free capacity (25 read and 25 write units are
+   shared by all tables in a region; this table takes 5 + 5):
+   `aws dynamodb list-tables --region eu-central-1`
+2. Build and deploy (the first time with `--guided`, which saves the answers to `samconfig.toml`, gitignored):
+
+   ```bash
+   npm --prefix server ci
+   npm --prefix server run build
+   sam deploy --guided --template-file infra/template.yaml --stack-name lineup-planner \
+     --region eu-central-1 --capabilities CAPABILITY_IAM --resolve-s3
+   ```
+
+   Parameters: `AlertEmail` (monthly cost alert, account-wide), `AlertAmountUsd` (default 1) and
+   `AllowedOrigins` (the Vercel URL plus `http://localhost:8081`, comma separated).
+3. Check the live API (creates two test teams and deletes them again):
+   `API_URL=<ApiUrl output> ORIGIN=<Vercel URL> node server/scripts/smoke.mjs`
+4. Put the `ApiUrl` output in `EXPO_PUBLIC_API_URL`, in a local `.env` and in Vercel's environment variables.
+
+Later deploys: `npm --prefix server run build && sam deploy` (reads `samconfig.toml`). The table has deletion
+protection and is kept if the stack is deleted.
+
+### Local API
+
+```bash
+npm --prefix server run dev                     # API on http://localhost:3001, in memory
+docker run --rm -p 8000:8000 amazon/dynamodb-local
+DYNAMODB_ENDPOINT=http://localhost:8000 npm --prefix server run dev            # ... on DynamoDB Local
+TEST_REPO=dynamodb DYNAMODB_ENDPOINT=http://localhost:8000 npx vitest run server  # API tests on DynamoDB Local
+```
+
 ## Development
 
 ```bash
 npm install
-npm test            # unit tests for the core module (vitest)
+npm --prefix server install   # the shared-teams server (needed for the typecheck)
+npm test            # unit tests for the core module and the server (vitest)
 npm run typecheck
 npm run e2e         # export the web build and run the Playwright smoke test (needs Chromium)
 npm run web         # start the Expo dev server for web (also: npm run ios / android)

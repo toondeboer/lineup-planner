@@ -2,12 +2,12 @@ import { describe, expect, it } from 'vitest';
 import type { Player } from '../../src/core/types';
 import { handle, type TeamView } from '../src/api';
 import { hashToken } from '../src/auth';
-import { MemoryRepo } from '../src/memoryRepo';
+import { newRepo } from './repo';
 
 const START = Date.parse('2026-11-25T12:00:00Z');
 
-function setup() {
-  const repo = new MemoryRepo();
+async function setup() {
+  const repo = await newRepo();
   let time = START;
   const deps = { repo, now: () => new Date(time) };
   const call = (
@@ -36,7 +36,9 @@ const squad: Player[] = [
 
 type Created = { team: TeamView; token: string };
 
-async function createTeam(t: ReturnType<typeof setup>, name = 'JO17-1') {
+type T = Awaited<ReturnType<typeof setup>>;
+
+async function createTeam(t: T, name = 'JO17-1') {
   const res = await t.call('POST', '/teams', {
     body: { name, displayName: 'Coach A', squad, match: { availableIds: ['p1', 'p2', 'p3'], pinned: { ST: 'p3' } } },
   });
@@ -44,18 +46,19 @@ async function createTeam(t: ReturnType<typeof setup>, name = 'JO17-1') {
   return res.body as Created;
 }
 
-async function join(t: ReturnType<typeof setup>, code: string, displayName = 'Coach B') {
+async function join(t: T, code: string, displayName = 'Coach B') {
+  t.advance(1000);
   const res = await t.call('POST', `/invites/${code}/join`, { body: { displayName } });
   expect(res.status).toBe(201);
   return res.body as Created;
 }
 
-const teamOf = async (t: ReturnType<typeof setup>, token: string) =>
+const teamOf = async (t: T, token: string) =>
   ((await t.call('GET', '/team', { token })).body as { team: TeamView }).team;
 
 describe('creating a team', () => {
   it('stores the squad and match and returns the team with a token and an invite code', async () => {
-    const t = setup();
+    const t = await setup();
     const { team, token } = await createTeam(t);
     expect(team.name).toBe('JO17-1');
     expect(team.version).toBe(1);
@@ -69,7 +72,7 @@ describe('creating a team', () => {
   });
 
   it('stores only a hash of the token', async () => {
-    const t = setup();
+    const t = await setup();
     const { team, token } = await createTeam(t);
     const stored = JSON.stringify(await t.repo.team(team.id));
     expect(stored).not.toContain(token);
@@ -77,7 +80,7 @@ describe('creating a team', () => {
   });
 
   it('works without a squad or match', async () => {
-    const t = setup();
+    const t = await setup();
     const res = await t.call('POST', '/teams', { body: { name: 'Veterans', displayName: 'Kim' } });
     expect(res.status).toBe(201);
     expect((res.body as Created).team).toMatchObject({ players: [], match: { availableIds: [], rotation: 'lines' } });
@@ -95,12 +98,12 @@ describe('creating a team', () => {
     [{ name: 'Team', displayName: 'A', match: { rotation: 'random' } }, 'invalid_rotation'],
     [{ name: 'Team', displayName: 'A', match: { hacked: true } }, 'invalid_match'],
   ])('rejects %j with %s', async (body, error) => {
-    const res = await setup().call('POST', '/teams', { body });
+    const res = await (await setup()).call('POST', '/teams', { body });
     expect(res).toEqual({ status: 400, body: { error } });
   });
 
   it('rejects bodies that are not JSON objects or are too large', async () => {
-    const t = setup();
+    const t = await setup();
     expect((await t.call('POST', '/teams', { rawBody: '{nope' })).body).toEqual({ error: 'invalid_json' });
     expect((await t.call('POST', '/teams', { rawBody: '[1]' })).body).toEqual({ error: 'invalid_body' });
     expect((await t.call('POST', '/teams', { rawBody: 'x'.repeat(70_000) })).status).toBe(413);
@@ -109,14 +112,14 @@ describe('creating a team', () => {
 
 describe('invites', () => {
   it('shows a preview for a valid code', async () => {
-    const t = setup();
+    const t = await setup();
     const { team } = await createTeam(t);
     const res = await t.call('GET', `/invites/${team.inviteCode}`);
     expect(res).toEqual({ status: 200, body: { teamName: 'JO17-1', playerCount: 3, memberCount: 1 } });
   });
 
   it('gives 404 for unknown and malformed codes', async () => {
-    const t = setup();
+    const t = await setup();
     await createTeam(t);
     for (const code of ['0'.repeat(32), 'abc', '../team']) {
       expect((await t.call('GET', `/invites/${encodeURIComponent(code)}`)).status).toBe(404);
@@ -125,7 +128,7 @@ describe('invites', () => {
   });
 
   it('lets a new member join and edit the team', async () => {
-    const t = setup();
+    const t = await setup();
     const a = await createTeam(t);
     const b = await join(t, a.team.inviteCode);
     expect(b.team.id).toBe(a.team.id);
@@ -137,7 +140,7 @@ describe('invites', () => {
   });
 
   it('resetting the link stops the old code but keeps existing members', async () => {
-    const t = setup();
+    const t = await setup();
     const a = await createTeam(t);
     const b = await join(t, a.team.inviteCode);
     const res = await t.call('POST', '/team/invite', { token: b.token });
@@ -156,7 +159,7 @@ describe('authentication', () => {
     ['an unknown token', { authorization: `Bearer ${'x'.repeat(43)}` }],
     ['a malformed header', { authorization: 'Basic abc' }],
   ])('refuses %s', async (_, headers) => {
-    const t = setup();
+    const t = await setup();
     await createTeam(t);
     for (const [method, path] of [
       ['GET', '/team'],
@@ -170,7 +173,7 @@ describe('authentication', () => {
   });
 
   it("never lets one team see or change another team's data", async () => {
-    const t = setup();
+    const t = await setup();
     const a = await createTeam(t, 'Team A');
     const b = await createTeam(t, 'Team B');
 
@@ -193,7 +196,7 @@ describe('authentication', () => {
 
 describe('polling', () => {
   it('answers "unchanged" while the version is the same, and the full team once it changes', async () => {
-    const t = setup();
+    const t = await setup();
     const a = await createTeam(t);
     const b = await join(t, a.team.inviteCode);
     const poll = (since: number) => t.call('GET', '/team', { token: a.token, query: { since: String(since) } });
@@ -206,7 +209,7 @@ describe('polling', () => {
   });
 
   it('records when a member was last seen, at most once an hour, without bumping the version', async () => {
-    const t = setup();
+    const t = await setup();
     const a = await createTeam(t);
     t.advance(30 * 60 * 1000);
     expect((await teamOf(t, a.token)).members[0].lastSeenAt).toBe('2026-11-25T12:00:00.000Z');
@@ -219,7 +222,7 @@ describe('polling', () => {
 
 describe('players and match', () => {
   it('uses the id from the path and drops unknown fields', async () => {
-    const t = setup();
+    const t = await setup();
     const a = await createTeam(t);
     await t.call('PUT', '/players/p1', { token: a.token, body: { id: 'other', name: ' Noah B ', ratings: { CB: 2 }, admin: true } });
     const p1 = (await teamOf(t, a.token)).players.find((p) => p.id === 'p1');
@@ -228,7 +231,7 @@ describe('players and match', () => {
   });
 
   it('removes a deleted player from the match as well', async () => {
-    const t = setup();
+    const t = await setup();
     const a = await createTeam(t);
     await t.call('PATCH', '/match', { token: a.token, body: { goalkeeperIds: ['p2'] } });
     await t.call('DELETE', '/players/p3', { token: a.token });
@@ -238,7 +241,7 @@ describe('players and match', () => {
   });
 
   it('changes only the match fields that are sent', async () => {
-    const t = setup();
+    const t = await setup();
     const a = await createTeam(t);
     const b = await join(t, a.team.inviteCode);
     await t.call('PATCH', '/match', { token: a.token, body: { formationId: '442' } });
@@ -246,8 +249,24 @@ describe('players and match', () => {
     expect((await teamOf(t, a.token)).match).toMatchObject({ formationId: '442', strictSwaps: true, pinned: { ST: 'p3' } });
   });
 
+  it('keeps every change and gives each its own version when coaches save at the same moment', async () => {
+    const t = await setup();
+    const a = await createTeam(t);
+    const names = ['Anna', 'Ben', 'Cas', 'Dirk', 'Eva'];
+    const results = await Promise.all(
+      names.map((name, i) => t.call('PUT', `/players/n${i}`, { token: a.token, body: { name, ratings: {} } })),
+    );
+    expect(results.every((r) => r.status === 200)).toBe(true);
+    expect(results.map((r) => (r.body as { version: number }).version).sort()).toEqual([2, 3, 4, 5, 6]);
+    const team = await teamOf(t, a.token);
+    expect(team.version).toBe(6);
+    expect(team.players.map((p) => p.name)).toEqual(expect.arrayContaining(names));
+    // new players come after the original squad
+    expect(team.players.slice(0, 3)).toEqual(squad);
+  });
+
   it('rejects unknown or empty match changes', async () => {
-    const t = setup();
+    const t = await setup();
     const a = await createTeam(t);
     expect((await t.call('PATCH', '/match', { token: a.token, body: {} })).body).toEqual({ error: 'invalid_match' });
     expect((await t.call('PATCH', '/match', { token: a.token, body: { seed: -1 } })).body).toEqual({ error: 'invalid_seed' });
@@ -255,7 +274,7 @@ describe('players and match', () => {
   });
 
   it('renames the team', async () => {
-    const t = setup();
+    const t = await setup();
     const a = await createTeam(t);
     expect((await t.call('PATCH', '/team', { token: a.token, body: { name: 'JO17-2' } })).body).toEqual({ version: 2 });
     expect((await teamOf(t, a.token)).name).toBe('JO17-2');
@@ -264,7 +283,7 @@ describe('players and match', () => {
 
 describe('leaving and deleting', () => {
   it('a removed member loses access right away', async () => {
-    const t = setup();
+    const t = await setup();
     const a = await createTeam(t);
     const b = await join(t, a.team.inviteCode);
     expect((await t.call('DELETE', `/members/${b.team.you}`, { token: a.token })).status).toBe(200);
@@ -273,7 +292,7 @@ describe('leaving and deleting', () => {
   });
 
   it('the last member leaving deletes the team', async () => {
-    const t = setup();
+    const t = await setup();
     const a = await createTeam(t);
     expect((await t.call('DELETE', `/members/${a.team.you}`, { token: a.token })).body).toEqual({ deleted: true });
     expect(await t.repo.team(a.team.id)).toBeUndefined();
@@ -281,7 +300,7 @@ describe('leaving and deleting', () => {
   });
 
   it('deleting the team needs its name and removes everything', async () => {
-    const t = setup();
+    const t = await setup();
     const a = await createTeam(t);
     const b = await join(t, a.team.inviteCode);
     expect((await t.call('DELETE', '/team', { token: b.token, body: { confirmName: 'wrong' } })).body).toEqual({
@@ -296,7 +315,7 @@ describe('leaving and deleting', () => {
 
 describe('routing', () => {
   it('answers unknown paths, wrong methods and preflight requests', async () => {
-    const t = setup();
+    const t = await setup();
     expect((await t.call('GET', '/nope')).status).toBe(404);
     expect((await t.call('GET', '/teams')).status).toBe(405);
     expect((await t.call('GET', '/invites/%E0%A4%A')).status).toBe(404);

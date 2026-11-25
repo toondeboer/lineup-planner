@@ -12,6 +12,7 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      - run: npm ci --prefix server
       - run: npm run typecheck
       - run: npm test
   e2e:
@@ -25,3 +26,23 @@ jobs:
       - run: npm ci
       - run: npx playwright install --with-deps chromium
       - run: npm run e2e
+  server-dynamodb:
+    # the API tests again, on DynamoDB Local instead of the in-memory store
+    runs-on: ubuntu-latest
+    services:
+      dynamodb:
+        image: amazon/dynamodb-local:latest
+        ports:
+          - 8000:8000
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm ci --prefix server
+      - run: npx vitest run server
+        env:
+          TEST_REPO: dynamodb
+          DYNAMODB_ENDPOINT: http://localhost:8000

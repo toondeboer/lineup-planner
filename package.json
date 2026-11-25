@@ -35,7 +35,8 @@
     "web": "expo start --web",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
-    "e2e": "expo export --platform web && node --test e2e/smoke.test.mjs"
+    "e2e": "expo export --platform web --clear && node --test e2e/smoke.test.mjs",
+    "e2e:sharing": "EXPO_PUBLIC_API_URL=http://localhost:3101 expo export --platform web --output-dir dist-shared --clear && node --test e2e/sharing.test.mjs"
   },
   "private": true
 }

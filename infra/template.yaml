@@ -1,0 +1,149 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  Lineup Planner shared teams: one DynamoDB table and one Lambda function behind a function URL.
+  Sized to stay within the AWS free allowances. Build the code first: npm --prefix server run build
+
+Parameters:
+  AlertEmail:
+    Type: String
+    Description: Email address for the monthly cost alert.
+    AllowedPattern: '.+@.+\..+'
+  AlertAmountUsd:
+    Type: Number
+    Default: 1
+    Description: Email an alert when this app's actual cost this month goes over this many USD.
+  AllowedOrigins:
+    Type: CommaDelimitedList
+    Default: http://localhost:8081
+    Description: Web origins that may call the API, comma separated (the Vercel URL and the local dev server).
+  ReservedConcurrency:
+    Type: Number
+    Default: 0
+    MinValue: 0
+    Description: >
+      Lambda copies reserved for (and capping) this API; 0 = no reservation. Set to 5 once the account's
+      concurrency quota is above 10: AWS refuses a reservation that leaves the account fewer than 10.
+  CreateCostAlert:
+    Type: String
+    Default: 'true'
+    AllowedValues: ['true', 'false']
+    Description: >
+      Create a budget for the costs of resources tagged app=lineup-planner. Activate the tag "app" as a cost
+      allocation tag in the Billing console, or the budget sees no costs.
+
+Conditions:
+  Reserve: !Not [!Equals [!Ref ReservedConcurrency, 0]]
+  CostAlert: !Equals [!Ref CreateCostAlert, 'true']
+
+Resources:
+  Table:
+    Type: AWS::DynamoDB::Table
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      TableName: lineup-planner
+      TableClass: STANDARD
+      # Provisioned (not on-demand) capacity: the free allowance covers 25 RCU / 25 WCU per region,
+      # and fixed capacity throttles a traffic spike instead of billing it. No auto scaling.
+      BillingMode: PROVISIONED
+      ProvisionedThroughput:
+        ReadCapacityUnits: 5
+        WriteCapacityUnits: 5
+      AttributeDefinitions:
+        - AttributeName: pk
+          AttributeType: S
+        - AttributeName: sk
+          AttributeType: S
+      KeySchema:
+        - AttributeName: pk
+          KeyType: HASH
+        - AttributeName: sk
+          KeyType: RANGE
+      DeletionProtectionEnabled: true
+      Tags:
+        - Key: app
+          Value: lineup-planner
+
+  ApiLogs:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: /aws/lambda/lineup-planner-api
+      RetentionInDays: 14
+      Tags:
+        - Key: app
+          Value: lineup-planner
+
+  Api:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: lineup-planner-api
+      CodeUri: ../server/dist
+      Handler: index.handler
+      Runtime: nodejs24.x
+      Architectures: [arm64]
+      MemorySize: 256
+      Timeout: 10
+      # Reserved copies cap what a flood of requests can use, so it can't starve the account's other functions.
+      ReservedConcurrentExecutions: !If [Reserve, !Ref ReservedConcurrency, !Ref AWS::NoValue]
+      Tags:
+        app: lineup-planner
+      LoggingConfig:
+        LogGroup: !Ref ApiLogs
+      Environment:
+        Variables:
+          TABLE_NAME: !Ref Table
+          NODE_OPTIONS: --enable-source-maps
+      Policies:
+        - Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Action:
+                - dynamodb:GetItem
+                - dynamodb:PutItem
+                - dynamodb:UpdateItem
+                - dynamodb:DeleteItem
+                - dynamodb:ConditionCheckItem
+                - dynamodb:Query
+                - dynamodb:BatchWriteItem
+              Resource: !GetAtt Table.Arn
+      # Public URL; the API checks member tokens itself. SAM adds the permissions that let anyone call it.
+      FunctionUrlConfig:
+        AuthType: NONE
+        Cors:
+          AllowOrigins: !Ref AllowedOrigins
+          AllowMethods: [GET, POST, PUT, PATCH, DELETE]
+          AllowHeaders: [authorization, content-type]
+          MaxAge: 600
+
+  CostAlert:
+    Type: AWS::Budgets::Budget
+    Condition: CostAlert
+    Properties:
+      Budget:
+        BudgetName: lineup-planner-cost-alert
+        BudgetType: COST
+        TimeUnit: MONTHLY
+        BudgetLimit:
+          Amount: !Ref AlertAmountUsd
+          Unit: USD
+        # only this app's resources (tag app=lineup-planner), not the whole account
+        CostFilters:
+          TagKeyValue:
+            - user:app$lineup-planner
+      NotificationsWithSubscribers:
+        - Notification:
+            NotificationType: ACTUAL
+            ComparisonOperator: GREATER_THAN
+            Threshold: 100
+            ThresholdType: PERCENTAGE
+          Subscribers:
+            - SubscriptionType: EMAIL
+              Address: !Ref AlertEmail
+
+Outputs:
+  ApiUrl:
+    Description: Put this in EXPO_PUBLIC_API_URL (local .env and Vercel).
+    Value: !GetAtt ApiUrl.FunctionUrl
+  TableName:
+    Value: !Ref Table

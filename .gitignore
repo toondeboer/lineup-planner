@@ -41,3 +41,10 @@ yarn-error.*
 /android
 .vercel
 .env*
+
+# shared-teams server and AWS SAM
+server/dist/
+server/dist-dev/
+dist-shared/
+.aws-sam/
+samconfig.toml

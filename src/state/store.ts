@@ -1,29 +1,18 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
-import { demoSquad, type Player, type Rotation } from '../core';
+import { demoSquad, emptyMatch, withoutPlayer, type MatchState, type Player, type Rotation } from '../core';
+import { emptySync, mergePersisted, type SyncState, type TeamLink } from './persisted';
 
-export interface MatchState {
-  /** Ids of squad members who are available for this match. */
-  availableIds: string[];
-  /** Guests for this match only (saved guests live in the squad). */
-  guests: Player[];
-  formationId: string;
-  /** Explicit goalkeepers; empty means choose automatically. */
-  goalkeeperIds: string[];
-  /** Manual starting-lineup overrides: slot id -> player id. */
-  pinned: Record<string, string>;
-  /** Bumped by "Recalculate" to get a different but equally good plan; 0 means the default plan. */
-  seed: number;
-  /** Only like-for-like swaps: nobody changes position at a substitution. */
-  strictSwaps: boolean;
-  /** Rotation groups per line (defence, midfield, attack), or the most equal playing time. */
-  rotation: Rotation;
-}
+export type { MatchState, SyncState, TeamLink };
 
 interface Store {
   squad: Player[];
   match: MatchState;
+  /** The shared team this device is a member of; null when the squad is only on this device. */
+  team: TeamLink | null;
+  /** Local changes to the shared team that are not saved to it yet. */
+  sync: SyncState;
   upsertPlayer: (player: Player) => void;
   removePlayer: (id: string) => void;
   /** Fills an empty squad with 15 demo players, all available. Does nothing if the squad has players. */
@@ -41,18 +30,13 @@ interface Store {
   recalculate: () => void;
   setStrictSwaps: (strict: boolean) => void;
   setRotation: (rotation: Rotation) => void;
+  /** After creating or joining a team: use the team's squad and match from now on. */
+  connectTeam: (team: TeamLink, squad: Player[], match: MatchState) => void;
+  /** Stop sharing on this device. The squad and match stay here as a local copy. */
+  disconnectTeam: () => void;
+  /** Changes to the membership itself, e.g. a new invite code. */
+  updateTeam: (fields: Partial<TeamLink>) => void;
 }
-
-const emptyMatch: MatchState = {
-  availableIds: [],
-  guests: [],
-  formationId: '433',
-  goalkeeperIds: [],
-  pinned: {},
-  seed: 0,
-  strictSwaps: false,
-  rotation: 'lines',
-};
 
 export const newId = () => Math.random().toString(36).slice(2, 10);
 
@@ -61,6 +45,8 @@ export const useStore = create<Store>()(
     (set) => ({
       squad: [],
       match: emptyMatch,
+      team: null,
+      sync: emptySync,
       upsertPlayer: (player) =>
         set((s) => ({
           squad: s.squad.some((p) => p.id === player.id)
@@ -136,30 +122,19 @@ export const useStore = create<Store>()(
       recalculate: () => set((s) => ({ match: { ...s.match, seed: (s.match.seed ?? 0) + 1 } })),
       setStrictSwaps: (strictSwaps) => set((s) => ({ match: { ...s.match, strictSwaps, seed: 0 } })),
       setRotation: (rotation) => set((s) => ({ match: { ...s.match, rotation, seed: 0 } })),
+      connectTeam: (team, squad, match) => set({ team, squad, match: { ...emptyMatch, ...match }, sync: emptySync }),
+      disconnectTeam: () => set({ team: null, sync: emptySync }),
+      updateTeam: (fields) => set((s) => (s.team ? { team: { ...s.team, ...fields } } : {})),
     }),
     {
       name: 'lineup-planner',
       storage: createJSONStorage(() => AsyncStorage),
       version: 1,
-      // saves from before `seed`, `strictSwaps` and `rotation` existed (those get line rotation)
-      merge: (saved, current) => {
-        const persisted = saved as Partial<Store> | undefined;
-        return { ...current, ...persisted, match: { ...emptyMatch, ...persisted?.match } };
-      },
+      // older saves lack newer fields; keep `version` at 1 (see mergePersisted)
+      merge: mergePersisted,
     },
   ),
 );
-
-/** Removes a player from the match (availability, guests, keeper choice and pins). */
-function withoutPlayer(match: MatchState, id: string): MatchState {
-  return {
-    ...match,
-    availableIds: match.availableIds.filter((p) => p !== id),
-    guests: match.guests.filter((p) => p.id !== id),
-    goalkeeperIds: match.goalkeeperIds.filter((p) => p !== id),
-    pinned: Object.fromEntries(Object.entries(match.pinned).filter(([, p]) => p !== id)),
-  };
-}
 
 /** Everyone available for the match: available squad members followed by guests. */
 export function availablePlayers(squad: Player[], match: MatchState): Player[] {

@@ -1,6 +1,8 @@
 import { router } from 'expo-router';
 import { Pressable, Text, View } from 'react-native';
 import { newId, useStore } from '../../state/store';
+import { isCloudEnabled } from '../../sync/api';
+import { dismissLostAccess, useSyncStatus } from '../../sync/useSync';
 import { Button, Card, Muted, Row, Screen, Title } from '../../ui/components';
 import { roleSummary } from '../../ui/roles';
 import { colors } from '../../ui/theme';
@@ -10,10 +12,32 @@ export default function SquadScreen() {
   const loadDemoSquad = useStore((s) => s.loadDemoSquad);
   const removeDemoSquad = useStore((s) => s.removeDemoSquad);
   const hasDemo = squad.some((p) => p.isDemo);
+  const team = useStore((s) => s.team);
+  const sync = useSyncStatus();
   return (
     <Screen>
       <Title>Squad</Title>
       <Muted>Add your players and rate how well they play each position.</Muted>
+      {isCloudEnabled() &&
+        (team ? (
+          <Card>
+            <Row style={{ justifyContent: 'space-between' }}>
+              <View style={{ flexShrink: 1 }}>
+                <Text style={{ fontSize: 16, fontWeight: '600', color: colors.text }}>{team.name}</Text>
+                <Muted>{SYNC_TEXT[sync.state]}</Muted>
+              </View>
+              <Button label="Team & invite link" kind="secondary" onPress={() => router.push('/team')} />
+            </Row>
+          </Card>
+        ) : (
+          <Button label="Share with your coaches" kind="secondary" onPress={() => router.push('/team')} />
+        ))}
+      {sync.lostAccess && (
+        <Card>
+          <Muted>You're no longer in the shared team. The squad stays on this phone as your own copy.</Muted>
+          <Button label="OK" kind="secondary" onPress={dismissLostAccess} />
+        </Card>
+      )}
       {hasDemo && (
         <Card>
           <Muted>You're trying the app with the demo team. Remove it to start with your own players.</Muted>
@@ -49,3 +73,11 @@ export default function SquadScreen() {
     </Screen>
   );
 }
+
+const SYNC_TEXT = {
+  off: 'Shared with your coaches',
+  synced: 'Shared with your coaches · up to date',
+  saving: 'Saving changes…',
+  offline: "Offline · changes are saved when you're back online",
+  error: "Some changes couldn't be saved",
+} as const;

@@ -76,8 +76,9 @@ their minutes (`formatShareMessage` in `src/core/format.ts`).
 
 ## Deploying the web app (Vercel)
 
-`vercel.json` is set up for a static deploy: it builds with `npx expo export --platform web`,
-serves `dist/`, and rewrites unknown paths to `index.html` so refreshing `/plan` works.
+`vercel.json` is set up for a static deploy: it builds with `npx expo export --platform web --clear`,
+serves `dist/`, and rewrites unknown paths to `index.html` so refreshing `/plan` and invite links
+(`/join/<code>`) work. `--clear` matters: Metro's cache can keep an `EXPO_PUBLIC_` value from an earlier build.
 
 1. In Vercel choose **Add New > Project** and import this GitHub repository (free Hobby plan).
 2. Keep the detected settings (they come from `vercel.json`) and deploy.
@@ -85,7 +86,8 @@ serves `dist/`, and rewrites unknown paths to `index.html` so refreshing `/plan`
 
 Or from a terminal: `npx vercel` (preview) / `npx vercel --prod`.
 
-Squad data is stored in the browser's local storage, so each browser starts with an empty squad.
+Squad data is stored in the browser's local storage, so each browser starts with an empty squad, unless
+the coach joins a shared team (below).
 
 ## Status
 
@@ -99,15 +101,75 @@ Squad data is stored in the browser's local storage, so each browser starts with
 | M5 Plan screen | done |
 | M6 WhatsApp sharing | done (device test pending) |
 | M7 Web smoke test (e2e) | done |
+| M8 Shared teams (invite link, sync, AWS backend) | built; deploy and device test pending |
 | Device test of native share, lint config | open |
+
+## Shared teams
+
+Coaches can share their squad: **Share with your coaches** on the Squad tab creates a team and an invite link
+(`/join/<code>`). Everyone who joins can edit the players, ratings and the upcoming match. There are no
+accounts: each phone gets a secret member token when it joins. Edits are saved in the background (offline
+edits are kept and saved later) and other coaches' changes arrive within about 15 seconds. The in-app Privacy
+screen explains what is stored. Design and decisions: [docs/plans/shared-teams.md](docs/plans/shared-teams.md).
+
+- `server/`: the API, one Lambda function behind a function URL, on one DynamoDB table in eu-central-1, sized
+  to stay within the AWS free allowances. Infrastructure: [infra/template.yaml](infra/template.yaml) (AWS SAM).
+- `src/sync/`: the app side: API client, the sync engine (`engine.ts`, pure and tested in Node) and its hook.
+- Builds without `EXPO_PUBLIC_API_URL` are local-only and hide sharing.
+
+### Deploy
+
+Needs the AWS CLI and the SAM CLI, signed in as an IAM Identity Center or IAM user (not the root user).
+
+1. Check that no other DynamoDB tables in eu-central-1 use **provisioned** capacity: the free 25 read and
+   25 write units are shared by all provisioned tables in a region, and this table takes 5 + 5.
+   On-demand tables don't count. `aws dynamodb list-tables --region eu-central-1`
+2. Check the account's Lambda concurrency in eu-central-1:
+   `aws lambda get-account-settings --region eu-central-1 --query AccountLimit`. If it is 10 (common on
+   newer accounts), request the default of 1000 in the Service Quotas console (Lambda, "Concurrent
+   executions", eu-central-1; free). Until then deploy with `ReservedConcurrency=0`; afterwards redeploy with
+   `ReservedConcurrency=5`, which caps the API and keeps a flood of requests from starving other functions.
+3. Build and deploy (the first time with `--guided`, which saves the answers to `samconfig.toml`, gitignored):
+
+   ```bash
+   npm --prefix server ci
+   npm --prefix server run build
+   sam deploy --guided --template-file infra/template.yaml --stack-name lineup-planner \
+     --region eu-central-1 --capabilities CAPABILITY_IAM --resolve-s3 --tags app=lineup-planner
+   ```
+
+   Parameters: `AlertEmail`, `AlertAmountUsd` (default 1), `AllowedOrigins` (the Vercel URL plus
+   `http://localhost:8081`, comma separated), `ReservedConcurrency` (see step 2) and `CreateCostAlert`.
+4. Cost alert: the budget only counts resources tagged `app=lineup-planner`. Activate `app` once under
+   Billing > Cost allocation tags (it shows up there about a day after the first deploy).
+5. Check the live API (creates two test teams and deletes them again):
+   `API_URL=<ApiUrl output> ORIGIN=<Vercel URL> node server/scripts/smoke.mjs`
+6. Put the `ApiUrl` output in `EXPO_PUBLIC_API_URL`, in a local `.env` and in Vercel's environment variables
+   (Expo builds it into the bundle, so Vercel needs it at build time). Without it the app stays local-only
+   and hides sharing. For the iOS and Android apps, also set `EXPO_PUBLIC_WEB_URL` to the Vercel URL, so
+   invite links they share open in a browser; on the web the site's own address is used.
+
+Later deploys: `npm --prefix server run build && sam deploy` (reads `samconfig.toml`). The table has deletion
+protection and is kept if the stack is deleted.
+
+### Local API
+
+```bash
+npm --prefix server run dev                     # API on http://localhost:3001, in memory
+docker run --rm -p 8000:8000 amazon/dynamodb-local
+DYNAMODB_ENDPOINT=http://localhost:8000 npm --prefix server run dev            # ... on DynamoDB Local
+TEST_REPO=dynamodb DYNAMODB_ENDPOINT=http://localhost:8000 npx vitest run server  # API tests on DynamoDB Local
+```
 
 ## Development
 
 ```bash
 npm install
-npm test            # unit tests for the core module (vitest)
+npm --prefix server install   # the shared-teams server (needed for the typecheck)
+npm test            # unit tests for the core module and the server (vitest)
 npm run typecheck
 npm run e2e         # export the web build and run the Playwright smoke test (needs Chromium)
+npm run e2e:sharing # two coaches sharing a team in the browser, against the local API
 npm run web         # start the Expo dev server for web (also: npm run ios / android)
 ```
 

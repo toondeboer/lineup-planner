@@ -1,5 +1,5 @@
 import { withoutPlayer, type MatchState } from '../../src/core/match';
-import type { Player } from '../../src/core/types';
+import type { TeamView } from '../../src/core/sharing';
 import { bearerToken, hashToken, isInviteCode, newId, newInviteCode, newToken } from './auth';
 import { TeamGoneError, type Member, type Repo, type TeamData } from './model';
 import * as v from './validate';
@@ -21,26 +21,6 @@ export interface ApiResponse {
 export interface Deps {
   repo: Repo;
   now: () => Date;
-}
-
-/** What members see of each other: no token hashes. */
-export interface MemberView {
-  id: string;
-  displayName: string;
-  joinedAt: string;
-  lastSeenAt: string;
-}
-
-export interface TeamView {
-  id: string;
-  name: string;
-  inviteCode: string;
-  version: number;
-  /** The caller's member id. */
-  you: string;
-  members: MemberView[];
-  players: Player[];
-  match: MatchState;
 }
 
 class HttpError extends Error {

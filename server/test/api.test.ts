@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { Player } from '../../src/core/types';
-import { handle, type TeamView } from '../src/api';
+import type { TeamView } from '../../src/core/sharing';
+import { handle } from '../src/api';
 import { hashToken } from '../src/auth';
 import { newRepo } from './repo';
 

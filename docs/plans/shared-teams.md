@@ -98,8 +98,8 @@ src/app/team.tsx             modal: create team / invite link, members, reset li
 src/app/join/[code].tsx      preview -> "Your name" -> Join
 ```
 
-`Player`, `Role` and `Rating` come from `src/core/types.ts`. `MatchState` moves from `src/state/store.ts`
-to `src/core` so that both the app and the server can import it.
+The app and the server share `Player` (`src/core/types.ts`), `MatchState` (`src/core/match.ts`) and the API
+contract types `TeamView`, `PollResult` and friends (`src/core/sharing.ts`).
 
 ## Client
 
@@ -109,7 +109,8 @@ to `src/core` so that both the app and the server can import it.
   - Add persisted `team: { id, name, inviteCode, token, version } | null`.
   - Add persisted `sync: { dirtyPlayerIds, deletedPlayerIds, dirtyMatchKeys }`.
   - Add `replaceAll(squad, match)` for applying the server's data.
-  - Bump `version` to 2 and keep the `merge` back-compatible.
+  - Keep the persist `version` at 1: zustand drops a save whose version differs unless there is a migrate
+    function. `mergePersisted` (`src/state/persisted.ts`) gives older saves the new fields' defaults.
   - Existing actions stay as they are.
 - `src/app/_layout.tsx`: register the `team` and `join/[code]` screens; start the sync engine.
 - `src/app/(tabs)/index.tsx`: a "Share with team" button, or the team name and sync status once shared.

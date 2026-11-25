@@ -128,7 +128,10 @@ Needs the AWS CLI signed in to the account and the SAM CLI.
    `AllowedOrigins` (the Vercel URL plus `http://localhost:8081`, comma separated).
 3. Check the live API (creates two test teams and deletes them again):
    `API_URL=<ApiUrl output> ORIGIN=<Vercel URL> node server/scripts/smoke.mjs`
-4. Put the `ApiUrl` output in `EXPO_PUBLIC_API_URL`, in a local `.env` and in Vercel's environment variables.
+4. Put the `ApiUrl` output in `EXPO_PUBLIC_API_URL`, in a local `.env` and in Vercel's environment variables
+   (Expo builds it into the bundle, so Vercel needs it at build time). Without it the app stays local-only
+   and hides sharing. For the iOS and Android apps, also set `EXPO_PUBLIC_WEB_URL` to the Vercel URL, so
+   invite links they share open in a browser; on the web the site's own address is used.
 
 Later deploys: `npm --prefix server run build && sam deploy` (reads `samconfig.toml`). The table has deletion
 protection and is kept if the stack is deleted.

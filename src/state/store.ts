@@ -34,6 +34,8 @@ interface Store {
   connectTeam: (team: TeamLink, squad: Player[], match: MatchState) => void;
   /** Stop sharing on this device. The squad and match stay here as a local copy. */
   disconnectTeam: () => void;
+  /** Changes to the membership itself, e.g. a new invite code. */
+  updateTeam: (fields: Partial<TeamLink>) => void;
 }
 
 export const newId = () => Math.random().toString(36).slice(2, 10);
@@ -122,6 +124,7 @@ export const useStore = create<Store>()(
       setRotation: (rotation) => set((s) => ({ match: { ...s.match, rotation, seed: 0 } })),
       connectTeam: (team, squad, match) => set({ team, squad, match: { ...emptyMatch, ...match }, sync: emptySync }),
       disconnectTeam: () => set({ team: null, sync: emptySync }),
+      updateTeam: (fields) => set((s) => (s.team ? { team: { ...s.team, ...fields } } : {})),
     }),
     {
       name: 'lineup-planner',

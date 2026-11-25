@@ -1,8 +1,10 @@
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
+import { useSync } from '../sync/useSync';
 import { colors } from '../ui/theme';
 
 export default function RootLayout() {
+  useSync();
   return (
     <>
       <StatusBar style="dark" />

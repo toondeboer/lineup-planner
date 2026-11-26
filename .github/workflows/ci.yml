@@ -29,6 +29,13 @@ jobs:
       - run: npm run e2e
       - run: npm ci --prefix server
       - run: npm run e2e:sharing
+      - name: Upload e2e failure reports
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-failure-reports
+          path: e2e/artifacts/
+          if-no-files-found: ignore
   server-dynamodb:
     # the API tests again, on DynamoDB Local instead of the in-memory store
     runs-on: ubuntu-latest

@@ -131,7 +131,7 @@ Needs the AWS CLI and the SAM CLI, signed in as an IAM Identity Center or IAM us
    newer accounts), request the default of 1000 in the Service Quotas console (Lambda, "Concurrent
    executions", eu-central-1; free). Until then deploy with `ReservedConcurrency=0`; afterwards redeploy with
    `ReservedConcurrency=5`, which caps the API and keeps a flood of requests from starving other functions.
-3. Build and deploy (the first time with `--guided`, which saves the answers to `samconfig.toml`, gitignored):
+3. Build and deploy (the first time with `--guided`, which saves the answers to `infra/samconfig.toml`, gitignored):
 
    ```bash
    npm --prefix server ci
@@ -151,8 +151,10 @@ Needs the AWS CLI and the SAM CLI, signed in as an IAM Identity Center or IAM us
    and hides sharing. For the iOS and Android apps, also set `EXPO_PUBLIC_WEB_URL` to the Vercel URL, so
    invite links they share open in a browser; on the web the site's own address is used.
 
-Later deploys: `npm --prefix server run build && sam deploy` (reads `samconfig.toml`). The table has deletion
-protection and is kept if the stack is deleted.
+Later deploys: `npm --prefix server run build && cd infra && sam deploy` (reads `infra/samconfig.toml`, which
+sits next to the template). To change one parameter, pass **all** of them in `--parameter-overrides`: the flag
+replaces the saved list, and parameters left out fall back to their defaults (`AllowedOrigins` would become
+localhost only). The table has deletion protection and is kept if the stack is deleted.
 
 ### Local API
 

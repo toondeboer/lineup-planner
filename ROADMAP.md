@@ -71,8 +71,8 @@ Still open from the README status table: testing native sharing on a device, and
 - [ ] **Multiple teams per coach** (M / M), e.g. a coach who runs both the first team and a youth team.
 - [x] **Cloud sync and shared squads** (M / L). Built without accounts: a secret invite link, member tokens,
   background sync with polling, on AWS (DynamoDB + Lambda) within the free allowances, plus an in-app privacy
-  screen. See [docs/plans/shared-teams.md](docs/plans/shared-teams.md). Still to do: deploy, test on phones, and
-  add a contact address to the privacy screen before a wider release.
+  screen. See [docs/plans/shared-teams.md](docs/plans/shared-teams.md). Live since 2026-11-25. Still to do: test
+  on phones, and add a contact address to the privacy screen before a wider release.
 - [ ] **Collect availability from players** (M / L). Share a link in the team WhatsApp; players tap "in" or "out",
   and the match tab fills itself.
 - [ ] **Printable team sheet / PDF** (L / S) for the dressing room or the referee.

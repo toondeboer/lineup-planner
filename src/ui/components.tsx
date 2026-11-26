@@ -341,11 +341,14 @@ const useStyles = makeStyles((t) => {
       color: t.color.text.primary,
       ...t.typography[c.input.text],
     },
+    // An outline on top of the green border, so the focus ring is 2 pt without the text moving.
+    // On the web it also replaces the browser's default (blue) focus ring.
     inputFocused: {
       borderColor: t.color.border.focus,
-      borderWidth: c.input.focusBorderWidth,
-      paddingHorizontal: c.input.paddingX - (c.input.focusBorderWidth - c.input.borderWidth),
-      paddingVertical: c.input.paddingY - (c.input.focusBorderWidth - c.input.borderWidth),
+      outlineColor: t.color.border.focus,
+      outlineStyle: 'solid',
+      outlineWidth: c.input.focusBorderWidth - c.input.borderWidth,
+      outlineOffset: 0,
     },
     notice: { padding: c.notice.padding, borderRadius: c.notice.radius, gap: c.notice.gap },
     groupBadge: {

@@ -28,6 +28,12 @@ const config: ExpoConfig = {
   // set in App Store Connect and the Play Console: use NAME there.
   name: IS_DEV ? `${LABEL} Dev` : LABEL,
   slug: 'bench-logistics',
+  // the EAS project (expo.dev/@toondeboer98/bench-logistics); `eas init` can't write to a dynamic
+  // config, so the ID it printed is set here by hand
+  owner: 'toondeboer98',
+  extra: {
+    eas: { projectId: '043a92e5-ca7f-4a4c-a51f-dc2927215902' },
+  },
   version: '1.0.0',
   orientation: 'portrait',
   icon: './assets/icon.png',

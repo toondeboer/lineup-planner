@@ -116,6 +116,9 @@ test(SHARE_TEST, { timeout: 120_000 }, withReport(SHARE_TEST, async () => {
   await btn(b.page, 'Add player').click();
   await b.page.getByLabel('Player name').fill('Local Lars');
   await btn(b.page, 'Save').click();
+  // Save closes the player screen with history.back(); opening the link before that has landed
+  // lets the back navigation cancel it (seen in CI on SDK 58)
+  await btn(b.page, 'Edit Local Lars').waitFor();
   await b.page.goto(link);
   await b.page.getByText('Join JO17-1').waitFor();
   await b.page.getByText(/1 player on this phone will be replaced/).waitFor();

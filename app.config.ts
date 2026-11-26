@@ -49,7 +49,9 @@ const config: ExpoConfig = {
   // kept as `lineup-planner`: invite links already sent use this scheme
   scheme: 'lineup-planner',
   plugins: [
-    'expo-router',
+    // SDK 58 loads each web screen on first visit by default. Coaches use the app on the
+    // sideline with patchy signal, so ship every screen up front and keep it working offline.
+    ['expo-router', { asyncRoutes: { web: false } }],
     'expo-font',
     'expo-system-ui',
     [

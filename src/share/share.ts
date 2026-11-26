@@ -48,7 +48,8 @@ export async function shareImage(base64: string, text?: string): Promise<'shared
   }
   const [{ File: NativeFile, Paths }, Sharing] = await Promise.all([import('expo-file-system'), import('expo-sharing')]);
   const file = new NativeFile(Paths.cache, FILE_NAME);
-  file.write(base64, { encoding: 'base64' });
+  // async since SDK 58: wait, or the share sheet could get a half-written image
+  await file.write(base64, { encoding: 'base64' });
   await Sharing.shareAsync(file.uri, { mimeType: 'image/png', dialogTitle: 'Share lineup' });
   return 'shared';
 }

@@ -135,8 +135,8 @@ Still open from the README status table: testing native sharing on a device, and
   `randomUUID` before IDs are synced or shared between devices.
 - [ ] **Routing details** (L / S). New players open `/player/<random id>`, so any deep link creates a player. Use
   `/player/new`, and show "not found" for unknown IDs.
-- [ ] **Dependency hygiene** (L / S). `expo-doctor` reports patch mismatches (`expo`, `expo-constants`,
-  `expo-linking`, `expo-router`); run `npx expo install --fix`. Add `expo-doctor` to CI.
+- [ ] **Dependency hygiene** (L / S). On SDK 58 now, and `npx expo-doctor` passes all checks. Still open: add
+  `expo-doctor` to CI.
 
 ### Testing
 

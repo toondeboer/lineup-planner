@@ -48,12 +48,47 @@ after(async () => {
 
 const btn = (page, name) => page.getByRole('button', { name, exact: true });
 
+// Every coach opened in the current test, so a failing test can save what each browser showed.
+let coaches = [];
+const ARTIFACTS = path.resolve('e2e/artifacts');
+
 async function coach() {
   const context = await browser.newContext({ viewport: { width: 400, height: 860 } });
   const page = await context.newPage();
   const errors = [];
+  // a timeline for failure reports only; `errors` is what the tests assert on
+  const log = [];
+  const started = Date.now();
+  const at = () => `${((Date.now() - started) / 1000).toFixed(1)}s`;
   page.on('pageerror', (e) => errors.push(e.message));
-  return { context, page, errors };
+  page.on('console', (m) => log.push(`${at()} console.${m.type()}: ${m.text()}`));
+  page.on('framenavigated', (f) => f === page.mainFrame() && log.push(`${at()} navigated: ${f.url()}`));
+  page.on('requestfailed', (r) => log.push(`${at()} request failed: ${r.method()} ${r.url()} ${r.failure()?.errorText}`));
+  page.on('response', (r) => r.url().includes(`:${API_PORT}/`) && log.push(`${at()} api ${r.status()}: ${r.request().method()} ${r.url()}`));
+  const c = { context, page, errors, log };
+  coaches.push(c);
+  return c;
+}
+
+/** Runs a test; when it fails, saves a screenshot and a text report per coach to e2e/artifacts. */
+function withReport(name, fn) {
+  return async () => {
+    coaches = [];
+    try {
+      await fn();
+    } catch (e) {
+      fs.mkdirSync(ARTIFACTS, { recursive: true });
+      const slug = name.replace(/[^a-z0-9]+/gi, '-').toLowerCase();
+      for (const [i, c] of coaches.entries()) {
+        const who = `${slug}-coach-${String.fromCharCode(97 + i)}`;
+        await c.page.screenshot({ path: path.join(ARTIFACTS, `${who}.png`), fullPage: true }).catch(() => {});
+        const text = await c.page.evaluate(() => document.body.innerText).catch((err) => `(no text: ${err.message})`);
+        const report = [`url: ${c.page.url()}`, '', '--- visible text ---', text, '', '--- page errors ---', ...c.errors, '', '--- timeline ---', ...c.log];
+        fs.writeFileSync(path.join(ARTIFACTS, `${who}.txt`), report.join('\n'));
+      }
+      throw e;
+    }
+  };
 }
 
 async function renamePlayer(page, from, to) {
@@ -63,7 +98,8 @@ async function renamePlayer(page, from, to) {
   await btn(page, `Edit ${to}`).waitFor();
 }
 
-test('two coaches share a team, edit it together, and one leaves', { timeout: 120_000 }, async () => {
+const SHARE_TEST = 'two coaches share a team, edit it together, and one leaves';
+test(SHARE_TEST, { timeout: 120_000 }, withReport(SHARE_TEST, async () => {
   const a = await coach();
   await a.page.goto(base);
   await btn(a.page, 'Load demo team (15 players)').click();
@@ -112,9 +148,10 @@ test('two coaches share a team, edit it together, and one leaves', { timeout: 12
   assert.equal(await a.page.getByText('Coach B').count(), 0);
 
   assert.deepEqual([...a.errors, ...b.errors], []);
-});
+}));
 
-test('an old invite link stops working after a reset', { timeout: 60_000 }, async () => {
+const RESET_TEST = 'an old invite link stops working after a reset';
+test(RESET_TEST, { timeout: 60_000 }, withReport(RESET_TEST, async () => {
   const a = await coach();
   await a.page.goto(base);
   await btn(a.page, 'Share with your coaches').click();
@@ -129,4 +166,4 @@ test('an old invite link stops working after a reset', { timeout: 60_000 }, asyn
   const c = await coach();
   await c.page.goto(oldLink);
   await c.page.getByText(/doesn't work any more/).waitFor();
-});
+}));

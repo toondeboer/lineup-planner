@@ -48,3 +48,6 @@ server/dist-dev/
 dist-shared/
 .aws-sam/
 samconfig.toml
+
+# e2e failure reports (screenshots and page text)
+e2e/artifacts/

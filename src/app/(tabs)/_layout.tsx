@@ -19,7 +19,7 @@ export default function TabsLayout() {
         },
         tabBarLabelStyle: t.typography[t.component.tabBar.text],
         headerStyle: { backgroundColor: t.color.bg.surface },
-        headerTitleStyle: { ...t.typography.heading, color: t.color.text.primary },
+        headerTitleStyle: t.navigation.headerTitle,
       }}
     >
       <Tabs.Screen

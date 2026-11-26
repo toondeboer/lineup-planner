@@ -1,7 +1,7 @@
 import { DarkTheme, DefaultTheme, ThemeProvider as NavigationThemeProvider, type Theme as NavigationTheme } from 'expo-router';
 import * as SystemUI from 'expo-system-ui';
 import { createContext, useContext, useEffect, useMemo, type ReactNode } from 'react';
-import { StyleSheet, useColorScheme, type TextStyle } from 'react-native';
+import { StyleSheet, useColorScheme, type ImageStyle, type TextStyle, type ViewStyle } from 'react-native';
 import { componentTokens, type ComponentTokens } from './tokens/components';
 import { themes, type Theme, type TextVariant, type TextToken } from './tokens/themes';
 
@@ -9,6 +9,12 @@ export interface AppTheme extends Theme {
   component: ComponentTokens;
   /** Ready-to-use text styles per variant, resolved for the font that actually loaded. */
   typography: Record<TextVariant, TextStyle>;
+  /** Text styles for Expo Router's headers and tab bar. */
+  navigation: {
+    headerTitle: TextStyle;
+    /** iOS headers use the system font unless a font family is set (SDK 58). */
+    headerBackTitle: { fontFamily?: string };
+  };
 }
 
 function textStyle(token: TextToken, customFont: boolean): TextStyle {
@@ -27,7 +33,11 @@ function buildTheme(base: Theme, customFont: boolean): AppTheme {
   const typography = Object.fromEntries(
     Object.entries(base.text).map(([k, v]) => [k, textStyle(v, customFont)]),
   ) as Record<TextVariant, TextStyle>;
-  return { ...base, component: componentTokens(base), typography };
+  const navigation = {
+    headerTitle: { ...typography.heading, color: base.color.text.primary },
+    headerBackTitle: { fontFamily: typography.body.fontFamily },
+  };
+  return { ...base, component: componentTokens(base), typography, navigation };
 }
 
 function navigationTheme(t: AppTheme): NavigationTheme {
@@ -88,7 +98,10 @@ export function useTheme(): AppTheme {
  *   const useStyles = makeStyles((t) => ({ row: { gap: t.space.sm } }));
  *   const styles = useStyles();
  */
-export function makeStyles<T extends StyleSheet.NamedStyles<T>>(factory: (t: AppTheme) => T): () => T {
+/** Built from React Native's public style types; RN 0.88 no longer exports `StyleSheet.NamedStyles`. */
+type NamedStyles<T> = { [P in keyof T]: ViewStyle | TextStyle | ImageStyle };
+
+export function makeStyles<T extends NamedStyles<T>>(factory: (t: AppTheme) => T & NamedStyles<T>): () => T {
   const cache = new WeakMap<AppTheme, T>();
   return function useStyles() {
     const theme = useTheme();

@@ -33,7 +33,8 @@ function AppStack() {
           contentStyle: { backgroundColor: t.color.bg.canvas },
           headerStyle: { backgroundColor: t.color.bg.surface },
           headerTintColor: t.color.text.link,
-          headerTitleStyle: { ...t.typography.heading, color: t.color.text.primary },
+          headerTitleStyle: t.navigation.headerTitle,
+          headerBackTitleStyle: t.navigation.headerBackTitle,
         }}
       >
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />

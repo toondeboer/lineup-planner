@@ -1,9 +1,7 @@
-import { Text } from 'react-native';
-import { Card, Heading, Muted, Screen } from '../ui/components';
-import { colors } from '../ui/theme';
+import { Card, Heading, Muted, Screen, Text } from '../ui/components';
 
 function P({ children }: { children: string }) {
-  return <Text style={{ color: colors.text, lineHeight: 21 }}>{children}</Text>;
+  return <Text>{children}</Text>;
 }
 
 /** What sharing a team stores, where, and how to remove it. */

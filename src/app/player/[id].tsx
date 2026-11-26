@@ -1,11 +1,9 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
-import { Text, TextInput } from 'react-native';
 import { ROLES, type Player, type Rating } from '../../core';
 import { useStore } from '../../state/store';
-import { Button, Card, Chip, Heading, Muted, Row, Screen } from '../../ui/components';
+import { Button, Card, Chip, Grow, Heading, Muted, Row, Screen, Text, TextField } from '../../ui/components';
 import { RATING_LABELS, ROLE_NAMES } from '../../ui/roles';
-import { colors } from '../../ui/theme';
 
 export default function PlayerScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -25,22 +23,17 @@ export default function PlayerScreen() {
     <Screen>
       <Card>
         <Heading>Name</Heading>
-        <TextInput
-          accessibilityLabel="Player name"
-          value={name}
-          onChangeText={setName}
-          placeholder="Player name"
-          autoFocus={!existing}
-          style={{ borderWidth: 1, borderColor: colors.line, borderRadius: 8, padding: 10, fontSize: 16 }}
-        />
+        <TextField label="Player name" value={name} onChangeText={setName} autoFocus={!existing} />
       </Card>
       <Card>
         <Heading>Positions</Heading>
         <Muted>Preferred = best position, OK = comfortable, Emergency = only if needed, No = avoid.</Muted>
         {ROLES.map((role) => (
-          <Row key={role} style={{ justifyContent: 'space-between' }}>
-            <Text style={{ width: 130, color: colors.text }}>{ROLE_NAMES[role]}</Text>
-            <Row style={{ gap: 4 }}>
+          <Row key={role} justify="space-between">
+            <Grow>
+              <Text>{ROLE_NAMES[role]}</Text>
+            </Grow>
+            <Row gap="xs">
               {([0, 1, 2, 3] as Rating[]).map((value) => (
                 <Chip
                   key={value}

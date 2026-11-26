@@ -112,8 +112,8 @@ Still open from the README status table: testing native sharing on a device, and
 
 ### Code quality and architecture
 
-- [ ] **Lint and format** (M / S). Run `npx expo lint` to create the ESLint config, add Prettier, and add both to CI.
-  This was already listed as open in the README.
+- [ ] **Lint and format** (M / S). ESLint is set up (`npm run lint`, in CI) with the design-system rules. Still
+  open: add Prettier and run it in CI.
 - [ ] **Remove hard-coded 11-a-side** (H / M; required for match formats). `OUTFIELD_SLOTS = 10` is used in
   `groups.ts`, `summary.ts` and `generate.ts`. Derive it from the formation instead, add formations per team size,
   and parameterise the group sizing (`2 * OUTFIELD_SLOTS` limit).
@@ -121,10 +121,9 @@ Still open from the README status table: testing native sharing on a device, and
   plan assembly with derived stats. Move them to `search.ts`, `random.ts` and `planStats.ts` (minutes, fit,
   warnings). The pin-aware move in `optimise` copies the accept-move logic of the generic moves; extract a shared
   `tryMove`.
-- [ ] **Deduplicate screen logic** (M / S). `plan.tsx` and `share.tsx` both build `groupOfSlot` and the pitch
-  markers. The fallback colour `#263238` is hard-coded three times. Add a `pitchMarkers(plan, formation, players)`
-  helper and a `colors.fullTime` theme token. Split `plan.tsx` (170 lines) into `FitSummary`,
-  `SubstitutionList`, `MinutesList` and `PinPicker` under `src/ui/plan/`.
+- [ ] **Split the Plan screen** (M / S). The pitch markers are shared now (`pitchMarkers` in `src/ui/Pitch.tsx`,
+  `pitch.fullTime` token). Still open: split `plan.tsx` into `FitSummary`, `SubstitutionList`, `MinutesList` and
+  `PinPicker` under `src/ui/plan/`.
 - [ ] **Typed planner errors** (M / S). The core throws English strings that the UI shows as they are
   (`usePlan` → `error`). Use error codes with parameters so the UI can explain them, suggest a fix, and translate them.
 - [ ] **Persistence migrations and validation** (H / S). The store is at `version: 1` with a catch-all `merge`. Add
@@ -163,11 +162,11 @@ Still open from the README status table: testing native sharing on a device, and
   `ios.bundleIdentifier`, `android.package`, and EAS Update channels.
 - [ ] **Error reporting** (M / S). Export an `ErrorBoundary` from the route layouts and add crash reporting (e.g.
   Sentry) before a store release.
-- [ ] **Dark mode** (L / S). Set `userInterfaceStyle: "automatic"` and add a dark palette to `theme.ts`. Coaches
-  use the app in evening matches.
-- [ ] **Accessibility** (M / S). Tab icons (currently hidden via `tabBarIconStyle`), check that the pitch slots' labels
-  reach native screen readers (they are SVG `G` elements, verified on web only), font scaling on the pitch text, and colour-blind
-  safe group colours (red and green groups on a green pitch).
+- [x] **Dark mode**. Light and dark themes follow the device setting; see `docs/design-system.md`. Still to do:
+  check both on a real iPhone and Android phone (status bar, splash, icons).
+- [ ] **Accessibility** (M / S). Done: tab icons, 44 pt touch targets, contrast tested in CI, group letters next to
+  the colours and a white ring on pitch markers. Still open: check that the pitch slots' labels reach native screen
+  readers (they are SVG `G` elements, verified on web only) and font scaling on the pitch text.
 - [ ] **CI speed** (L / S). Cache the Playwright browsers, and run the e2e job only after unit tests pass.
 
 ---

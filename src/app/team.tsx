@@ -1,6 +1,6 @@
 import { router } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
-import { Text, View } from 'react-native';
+import { APP_NAME } from '../config/app';
 import type { MemberView } from '../core';
 import { copyText, shareText } from '../share/share';
 import { useStore } from '../state/store';
@@ -16,8 +16,7 @@ import {
   removeMember,
   resetInvite,
 } from '../sync/teams';
-import { Button, Card, ConfirmButton, Heading, Muted, Notice, Row, Screen, TextField } from '../ui/components';
-import { colors } from '../ui/theme';
+import { Button, Card, ConfirmButton, Grow, Heading, Muted, Notice, Row, Screen, Text, TextField } from '../ui/components';
 
 /** Back to where the coach came from, or to the squad when the screen was opened directly. */
 const close = () => (router.canGoBack() ? router.back() : router.replace('/'));
@@ -103,8 +102,8 @@ function SharedTeam() {
     }
   }, []);
   useEffect(() => {
-    refresh();
-  }, [refresh]);
+    loadMembers().then(setMembers, (e) => setError(errorMessage(e)));
+  }, []);
 
   const run = (action: () => Promise<string | void>) => async () => {
     setError('');
@@ -119,7 +118,7 @@ function SharedTeam() {
   };
 
   const link = currentInviteUrl(team.inviteCode);
-  const message = `Join ${team.name} in Lineup Planner to edit the squad and line-ups: ${link}`;
+  const message = `Join ${team.name} in ${APP_NAME} to edit the squad and line-ups: ${link}`;
 
   return (
     <Screen>
@@ -130,7 +129,7 @@ function SharedTeam() {
 
       <Card>
         <Heading>Invite link</Heading>
-        <Text selectable style={{ color: colors.text }}>
+        <Text selectable tone="link">
           {link}
         </Text>
         <Muted>{PRIVACY}</Muted>
@@ -149,11 +148,11 @@ function SharedTeam() {
         <Heading>Coaches</Heading>
         {members === undefined && <Muted>Loading…</Muted>}
         {members?.map((m) => (
-          <Row key={m.id} style={{ justifyContent: 'space-between', flexWrap: 'nowrap' }}>
-            <View style={{ flexShrink: 1 }}>
-              <Text style={{ fontSize: 16, color: colors.text }}>{m.id === team.memberId ? `${m.displayName} (you)` : m.displayName}</Text>
+          <Row key={m.id} justify="space-between" wrap={false}>
+            <Grow>
+              <Text>{m.id === team.memberId ? `${m.displayName} (you)` : m.displayName}</Text>
               <Muted>{`Last seen ${formatSeen(m.lastSeenAt)}`}</Muted>
-            </View>
+            </Grow>
             {m.id !== team.memberId && (
               <ConfirmButton
                 label="Remove"

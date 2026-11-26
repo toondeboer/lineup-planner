@@ -1,11 +1,10 @@
 import { router } from 'expo-router';
-import { Pressable, Text, View } from 'react-native';
+import { Pressable } from 'react-native';
 import { newId, useStore } from '../../state/store';
 import { isCloudEnabled } from '../../sync/api';
 import { dismissLostAccess, useSyncStatus } from '../../sync/useSync';
-import { Button, Card, Muted, Row, Screen, Title } from '../../ui/components';
+import { Button, Card, Grow, Muted, Row, Screen, Text, Title } from '../../ui/components';
 import { roleSummary } from '../../ui/roles';
-import { colors } from '../../ui/theme';
 
 export default function SquadScreen() {
   const squad = useStore((s) => s.squad);
@@ -21,11 +20,11 @@ export default function SquadScreen() {
       {isCloudEnabled() &&
         (team ? (
           <Card>
-            <Row style={{ justifyContent: 'space-between' }}>
-              <View style={{ flexShrink: 1 }}>
-                <Text style={{ fontSize: 16, fontWeight: '600', color: colors.text }}>{team.name}</Text>
+            <Row justify="space-between">
+              <Grow>
+                <Text variant="bodyStrong">{team.name}</Text>
                 <Muted>{SYNC_TEXT[sync.state]}</Muted>
-              </View>
+              </Grow>
               <Button label="Team & invite link" kind="secondary" onPress={() => router.push('/team')} />
             </Row>
           </Card>
@@ -58,11 +57,11 @@ export default function SquadScreen() {
           onPress={() => router.push(`/player/${p.id}`)}
         >
           <Card>
-            <Row style={{ justifyContent: 'space-between', flexWrap: 'nowrap' }}>
-              <View style={{ flexShrink: 1 }}>
-                <Text style={{ fontSize: 17, fontWeight: '600', color: colors.text }}>{p.name}</Text>
+            <Row justify="space-between" wrap={false}>
+              <Grow>
+                <Text variant="heading">{p.name}</Text>
                 <Muted>{roleSummary(p)}</Muted>
-              </View>
+              </Grow>
               {p.isGuest && <Muted>guest</Muted>}
               {p.isDemo && <Muted>demo</Muted>}
             </Row>

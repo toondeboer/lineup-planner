@@ -1,10 +1,8 @@
 import { useState } from 'react';
-import { Text, TextInput } from 'react-native';
 import { FORMATIONS, ROLES, chooseGoalkeepers, describeRotation, getFormation, newGuest, type Role } from '../../core';
 import { availablePlayers, newId, useStore } from '../../state/store';
-import { Button, Card, Chip, Heading, Muted, Row, Screen, Title } from '../../ui/components';
+import { Button, Card, Chip, Grow, Heading, Muted, Row, Screen, Text, TextField, Title } from '../../ui/components';
 import { ROLE_NAMES } from '../../ui/roles';
-import { colors } from '../../ui/theme';
 
 export default function MatchScreen() {
   const squad = useStore((s) => s.squad);
@@ -49,18 +47,14 @@ export default function MatchScreen() {
       <Card>
         <Heading>Guests</Heading>
         {match.guests.map((g) => (
-          <Row key={g.id} style={{ justifyContent: 'space-between' }}>
-            <Text style={{ color: colors.text }}>{g.name}</Text>
+          <Row key={g.id} justify="space-between">
+            <Grow>
+              <Text>{g.name}</Text>
+            </Grow>
             <Button label={`Remove ${g.name}`} kind="secondary" onPress={() => removeGuest(g.id)} />
           </Row>
         ))}
-        <TextInput
-          accessibilityLabel="Guest name"
-          value={guestName}
-          onChangeText={setGuestName}
-          placeholder="Guest name"
-          style={{ borderWidth: 1, borderColor: colors.line, borderRadius: 8, padding: 10, fontSize: 16 }}
-        />
+        <TextField label="Guest name" value={guestName} onChangeText={setGuestName} />
         <Muted>Usual position</Muted>
         <Row>
           {(['ANY', ...ROLES] as const).map((r) => (

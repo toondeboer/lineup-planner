@@ -1,12 +1,11 @@
 import { useRef, useState } from 'react';
-import { Linking, Platform, Text } from 'react-native';
+import { Linking, Platform } from 'react-native';
 import type Svg from 'react-native-svg';
 import { formatShareMessage } from '../core';
 import { captureImage, copyText, shareImage, shareText, whatsappUrl } from '../share/share';
 import { usePlan } from '../state/usePlan';
-import { Button, Card, Heading, Muted, Screen } from '../ui/components';
-import { Pitch, type PitchMarker } from '../ui/Pitch';
-import { colors, groupColors } from '../ui/theme';
+import { Button, Card, Heading, Muted, Screen, Text } from '../ui/components';
+import { Pitch, pitchMarkers } from '../ui/Pitch';
 
 export default function ShareScreen() {
   const { plan, formation, players, pending } = usePlan();
@@ -21,17 +20,7 @@ export default function ShareScreen() {
     );
   }
 
-  const nameOf = (id: string) => players.find((p) => p.id === id)?.name ?? id;
-  const groupOfSlot = new Map<string, number>();
-  plan.groups.forEach((g, i) => g.slotIds.forEach((s) => groupOfSlot.set(s, i)));
-  const markers: Record<string, PitchMarker> = {};
-  for (const slot of formation.slots) {
-    const group = groupOfSlot.get(slot.id);
-    markers[slot.id] = {
-      name: nameOf(plan.starting[slot.id]),
-      color: group === undefined ? '#263238' : groupColors[group % groupColors.length],
-    };
-  }
+  const markers = pitchMarkers(plan, formation, players);
   const message = formatShareMessage(plan, players, formation.name);
 
   const run = (action: () => Promise<string | void>) => async () => {
@@ -53,22 +42,25 @@ export default function ShareScreen() {
     <Screen>
       <Card>
         <Heading>Starting lineup</Heading>
-        <Pitch formation={formation} markers={markers} title={`Starting lineup · ${formation.name}`} svgRef={svgRef} />
+        <Pitch formation={formation} markers={markers} title={`Starting lineup · ${formation.name}`} svgRef={svgRef} forExport />
       </Card>
       <Card>
         <Heading>Message</Heading>
-        <Text selectable style={{ color: colors.text, lineHeight: 20 }}>
+        <Text variant="small" selectable>
           {message}
         </Text>
       </Card>
       <Button
         label={Platform.OS === 'web' ? 'Share image and text' : 'Share image'}
-        onPress={run(() =>
-          withImage(async (b64) => {
-            const result = await shareImage(b64, message);
-            return result === 'downloaded' ? 'Image saved. Add it to the chat, then paste the text.' : '';
-          }),
-        )}
+        // wrapped so the svg ref is only read when the button is pressed, never during render
+        onPress={() =>
+          run(() =>
+            withImage(async (b64) => {
+              const result = await shareImage(b64, message);
+              return result === 'downloaded' ? 'Image saved. Add it to the chat, then paste the text.' : '';
+            }),
+          )()
+        }
       />
       <Button label="Share text" kind="secondary" onPress={run(async () => ((await shareText(message)) === 'copied' ? 'Text copied.' : ''))} />
       <Button label="Copy text" kind="secondary" onPress={run(async () => { await copyText(message); return 'Text copied.'; })} />

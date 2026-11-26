@@ -102,7 +102,9 @@ the coach joins a shared team (below).
 | M6 WhatsApp sharing | done (device test pending) |
 | M7 Web smoke test (e2e) | done |
 | M8 Shared teams (invite link, sync, AWS backend) | built; deploy and device test pending |
-| Device test of native share, lint config | open |
+| Design system: tokens, dark mode, Inter, app icon ([docs](docs/design-system.md)) | done (device test pending) |
+| Lint config | done (ESLint in CI; Prettier open) |
+| Device test of native share | open |
 
 ## Shared teams
 
@@ -170,9 +172,12 @@ npm install
 npm --prefix server install   # the shared-teams server (needed for the typecheck)
 npm test            # unit tests for the core module and the server (vitest)
 npm run typecheck
+npm run lint        # ESLint, including the design-system rules (no raw colours or font sizes in screens)
 npm run e2e         # export the web build and run the Playwright smoke test (needs Chromium)
 npm run e2e:sharing # two coaches sharing a team in the browser, against the local API
 npm run web         # start the Expo dev server for web (also: npm run ios / android)
+npm run icons       # regenerate the app icon, splash and favicon from the design tokens
 ```
 
 The planning logic lives in `src/core` and is pure TypeScript with no React or Expo imports.
+All styling comes from the design tokens in `src/design`; see [docs/design-system.md](docs/design-system.md).

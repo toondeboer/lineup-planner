@@ -1,4 +1,4 @@
-# Lineup Planner
+# Bench Logistics
 
 Football lineup and substitution planner for amateur teams with unlimited substitutions.
 Goal: everyone plays roughly equal time, while respecting preferred positions, with
@@ -176,8 +176,51 @@ npm run lint        # ESLint, including the design-system rules (no raw colours 
 npm run e2e         # export the web build and run the Playwright smoke test (needs Chromium)
 npm run e2e:sharing # two coaches sharing a team in the browser, against the local API
 npm run web         # start the Expo dev server for web (also: npm run ios / android)
+npm run dev         # start the dev server for a development build (APP_VARIANT=development)
 npm run icons       # regenerate the app icon, splash and favicon from the design tokens
 ```
 
 The planning logic lives in `src/core` and is pure TypeScript with no React or Expo imports.
 All styling comes from the design tokens in `src/design`; see [docs/design-system.md](docs/design-system.md).
+
+### Names and identifiers
+
+| What | Value | Where |
+|---|---|---|
+| Full name (stores, browser tab, in-app copy) | Bench Logistics | `APP_NAME` in `src/config/app.ts`, `NAME` in `app.config.ts` |
+| Label under the home-screen icon | Bench Log | `APP_LABEL`, `LABEL` |
+| iOS bundle ID / Android package | `com.toondeboer.benchlogistics` (development builds: `….dev`) | `APP_ID` in `app.config.ts` |
+
+The bundle ID and package are permanent once the app is in a store. A unit test keeps `app.config.ts` and
+`src/config/app.ts` in sync. The URL scheme, storage key, AWS resources and npm package names stay
+`lineup-planner`: changing them would break invite links, lose saved squads or replace the live database.
+
+### Development builds (EAS)
+
+Expo Go can't show the app's own icon or splash screen; a development build can. The profiles are in `eas.json`:
+
+| Profile | Builds | Installs on |
+|---|---|---|
+| `development` | Debug app with the dev client, bundle ID `….dev`, label "Bench Log Dev" | Registered iPhones (paid Apple Developer account) and any Android phone (APK) |
+| `development-simulator` | Same, for the iOS Simulator | This Mac's iOS Simulator |
+| `preview` | Release app, internal distribution | Registered iPhones, Android phones |
+| `production` | Store build; build numbers are kept by EAS (`appVersionSource: remote`) | App Store / Play Store |
+
+First time (needs your Expo account; run these yourself):
+
+```bash
+npx eas-cli@latest login
+npx eas-cli@latest init        # creates the EAS project; app.config.ts is dynamic, so if it asks,
+                               # add the printed id as extra: { eas: { projectId: '…' } } in app.config.ts
+npx eas-cli@latest device:create   # iOS only: register your iPhone (open the link on the phone)
+```
+
+Then build and run:
+
+```bash
+npx eas-cli@latest build --profile development --platform ios       # or --platform android
+npm run dev   # start the dev server, then open the installed "Bench Log Dev" app
+```
+
+Rebuild only after a native change (new native package, app config, SDK upgrade); JavaScript changes load
+from the dev server.

@@ -1,12 +1,12 @@
 import { router } from 'expo-router';
 import { useState } from 'react';
-import { Text, View } from 'react-native';
+import { View } from 'react-native';
 import { substitutionLines, type Plan } from '../../core';
+import { makeStyles } from '../../design';
 import { useStore } from '../../state/store';
 import { usePlan } from '../../state/usePlan';
-import { Button, Card, Chip, Heading, Muted, Row, Screen, Title } from '../../ui/components';
-import { Pitch, type PitchMarker } from '../../ui/Pitch';
-import { colors, groupColors } from '../../ui/theme';
+import { Button, Card, Chip, GroupBadge, Grow, Heading, Muted, Row, Screen, Text, Title } from '../../ui/components';
+import { Pitch, pitchMarkers } from '../../ui/Pitch';
 
 function FitSummary({ fit }: { fit: Plan['fit'] }) {
   const total = fit.preferred + fit.ok + fit.emergency + fit.unsuited;
@@ -14,7 +14,7 @@ function FitSummary({ fit }: { fit: Plan['fit'] }) {
   return (
     <Card>
       <Heading>Position fit</Heading>
-      <Text style={{ color: colors.text }}>
+      <Text>
         {`${pct(fit.preferred)} preferred · ${pct(fit.ok)} OK · ${pct(fit.emergency)} emergency · ${pct(fit.unsuited)} not suited`}
       </Text>
       {fit.unsuited + fit.emergency > 0 && (
@@ -28,6 +28,7 @@ function FitSummary({ fit }: { fit: Plan['fit'] }) {
 }
 
 export default function PlanScreen() {
+  const styles = useStyles();
   const { plan, error, formation, players, pending } = usePlan();
   const pinned = useStore((s) => s.match.pinned);
   const pin = useStore((s) => s.pin);
@@ -53,40 +54,38 @@ export default function PlanScreen() {
   }
 
   const nameOf = (id: string) => players.find((p) => p.id === id)?.name ?? id;
-  const groupOfSlot = new Map<string, number>();
-  plan.groups.forEach((g, i) => g.slotIds.forEach((s) => groupOfSlot.set(s, i)));
-  const firstOff = new Map<string, number>();
-  for (const sub of plan.substitutions) if (!firstOff.has(sub.offId)) firstOff.set(sub.offId, sub.minute);
-
-  const markers: Record<string, PitchMarker> = {};
-  for (const slot of formation.slots) {
-    const id = plan.starting[slot.id];
-    const group = groupOfSlot.get(slot.id);
-    markers[slot.id] = {
-      name: nameOf(id),
-      color: group === undefined ? '#263238' : groupColors[group % groupColors.length],
-      pinned: pinned[slot.id] !== undefined,
-      note: firstOff.has(id) ? `off ${firstOff.get(id)}'` : undefined,
-    };
-  }
-
+  const markers = pitchMarkers(plan, formation, players, { pinned, notes: true });
+  const groupOfSlot = (slotId: string) => plan.groups.findIndex((g) => g.slotIds.includes(slotId));
+  const roleOfSlot = (slotId: string) => formation.slots.find((s) => s.id === slotId)?.role ?? slotId;
   const lines = substitutionLines(plan, players);
-  const colorOfSlot = (slotId: string) => {
-    const g = groupOfSlot.get(slotId);
-    return g === undefined ? '#263238' : groupColors[g % groupColors.length];
-  };
   const hasPins = Object.keys(pinned).length > 0;
 
   return (
     <Screen>
       <Title>Plan</Title>
-      <View style={{ opacity: pending ? 0.5 : 1 }}>
+      <View style={pending && styles.pending}>
         <Pitch formation={formation} markers={markers} selectedSlot={selected} onSlotPress={(s) => setSelected(s === selected ? undefined : s)} />
       </View>
+      <Row gap="sm">
+        {plan.groups.map((g, i) => (
+          <Row key={i} gap="xs">
+            <GroupBadge group={i} />
+            <Text variant="caption" tone="muted">
+              {g.slotIds.map(roleOfSlot).join(' ')}
+            </Text>
+          </Row>
+        ))}
+        <Row gap="xs">
+          <GroupBadge group={undefined} />
+          <Text variant="caption" tone="muted">
+            Full match
+          </Text>
+        </Row>
+      </Row>
       <Muted>
         {pending
           ? 'Updating the plan…'
-          : 'Colours show rotation groups. Tap a position to choose who starts there; substitutions are recalculated.'}
+          : 'Colours and letters show rotation groups. Tap a position to choose who starts there; substitutions are recalculated.'}
       </Muted>
 
       {selected && (
@@ -127,10 +126,12 @@ export default function PlanScreen() {
       <FitSummary fit={plan.fit} />
 
       {plan.warnings.length > 0 && (
-        <Card style={{ borderColor: colors.warn }}>
-          <Heading>Heads up</Heading>
+        <Card tone="warning">
+          <Text variant="heading" tone="warning" header>
+            Heads up
+          </Text>
           {plan.warnings.map((w, i) => (
-            <Text key={i} style={{ color: colors.warn }}>
+            <Text key={i} tone="warning">
               {w.type === 'unsuited-position'
                 ? `${nameOf(w.playerId)} plays ${w.slotId} (rated "no") from ${w.from}' to ${w.to}'`
                 : `${nameOf(w.playerId)} is not rated as a goalkeeper`}
@@ -142,20 +143,21 @@ export default function PlanScreen() {
       <Card>
         <Heading>Substitutions</Heading>
         {lines.length === 0 && <Muted>No substitutions.</Muted>}
-        {lines.map((l, i) => (
-          <Row key={i} style={{ flexWrap: 'nowrap' }}>
-            <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: colorOfSlot(l.slotId) }} />
-            <Text style={{ width: 40, fontWeight: '700', color: colors.text }}>{`${l.minute}'`}</Text>
-            <View style={{ flexShrink: 1 }}>
-              <Text style={{ color: colors.text }}>
-                {`${l.on} on for ${l.off} (${l.slotId}${l.onSlotId ? `, plays ${l.onSlotId}` : ''})`}
-              </Text>
-              {l.moves.map((m, j) => (
-                <Muted key={j}>{`↳ ${m.name} moves to ${m.toSlotId}`}</Muted>
-              ))}
-            </View>
-          </Row>
-        ))}
+        {lines.map((l, i) => {
+          const group = groupOfSlot(l.slotId);
+          return (
+            <Row key={i} wrap={false}>
+              <GroupBadge group={group < 0 ? undefined : group} />
+              <Text variant="bodyStrong" tabular style={styles.minute}>{`${l.minute}'`}</Text>
+              <Grow>
+                <Text>{`${l.on} on for ${l.off} (${l.slotId}${l.onSlotId ? `, plays ${l.onSlotId}` : ''})`}</Text>
+                {l.moves.map((m, j) => (
+                  <Muted key={j}>{`↳ ${m.name} moves to ${m.toSlotId}`}</Muted>
+                ))}
+              </Grow>
+            </Row>
+          );
+        })}
       </Card>
 
       <Card>
@@ -169,12 +171,19 @@ export default function PlanScreen() {
           .slice()
           .sort((a, b) => plan.minutes[b.id] - plan.minutes[a.id] || a.name.localeCompare(b.name))
           .map((p) => (
-            <Row key={p.id} style={{ justifyContent: 'space-between', flexWrap: 'nowrap' }}>
-              <Text style={{ color: colors.text }}>{p.name}</Text>
-              <Text style={{ color: colors.muted }}>{`${plan.minutes[p.id]} min`}</Text>
+            <Row key={p.id} justify="space-between" wrap={false}>
+              <Grow>
+                <Text>{p.name}</Text>
+              </Grow>
+              <Text tone="muted" tabular>{`${plan.minutes[p.id]} min`}</Text>
             </Row>
           ))}
       </Card>
     </Screen>
   );
 }
+
+const useStyles = makeStyles((t) => ({
+  pending: { opacity: t.opacity.pending },
+  minute: { minWidth: t.space.xxl + t.space.sm },
+}));

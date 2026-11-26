@@ -1,7 +1,7 @@
 # Plan: shared teams (AWS: DynamoDB + Lambda, invite link)
 
-_Status: built (steps 1–6) on branch `claude/shared-teams`, 2026-11-25; not deployed yet. Covers the ROADMAP item
-"Cloud sync and shared squads"._
+_Status: live since 2026-11-25 (PR #7): stack `lineup-planner` in eu-central-1, web app on lineup.toondeboer.com.
+Covers the ROADMAP item "Cloud sync and shared squads"._
 
 ## Goal
 
@@ -29,8 +29,8 @@ People who never share keep using the app exactly as they do today: local only, 
 **Expected cost: $0 a month.** Two safety nets are part of the infrastructure template:
 
 - An AWS Budget with an email alert at **$1**, counting only resources tagged `app=lineup-planner`.
-- A cap of **5 concurrent copies** of the Lambda function (`ReservedConcurrency`; needs an account concurrency
-  quota above 10, so it is 0 until the quota is raised).
+- A cap of **5 concurrent copies** of the Lambda function (`ReservedConcurrency`). It needs an account
+  concurrency quota above 10; the quota was raised to 1000 and the cap set on 2026-11-26.
 
 Charges beyond the free allowances would be tiny anyway: $0.20 per extra million Lambda requests, and
 DynamoDB can't grow its bill from traffic because its capacity is fixed.

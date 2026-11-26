@@ -1,6 +1,6 @@
 # Roadmap
 
-Open work for Lineup Planner, split into product (what coaches get) and technical (how the code holds up).
+Open work for Bench Logistics, split into product (what coaches get) and technical (how the code holds up).
 Each item has a rough **value** (H/M/L) and **effort** (S/M/L). Tick items off here as they land.
 
 _Last reviewed: 2026-10-08._
@@ -158,8 +158,9 @@ Still open from the README status table: testing native sharing on a device, and
 
 ### Platform and delivery
 
-- [ ] **EAS setup** (M / S). Add `eas.json` (development, preview and production profiles),
-  `ios.bundleIdentifier`, `android.package`, and EAS Update channels.
+- [ ] **EAS setup** (M / S). Done: `eas.json` (development, simulator, preview, production), bundle ID and
+  package (`com.toondeboer.benchlogistics`, `.dev` for development builds), `expo-dev-client`. Still open: run
+  `eas init` and the first builds, and EAS Update channels.
 - [ ] **Error reporting** (M / S). Export an `ErrorBoundary` from the route layouts and add crash reporting (e.g.
   Sentry) before a store release.
 - [x] **Dark mode**. Light and dark themes follow the device setting; see `docs/design-system.md`. Still to do:

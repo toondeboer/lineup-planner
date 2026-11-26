@@ -85,7 +85,8 @@ function Example() {
 `android-icon-*.png`, `splash-icon*.png` and `favicon.png` from the tokens (Node 22.18+).
 The iOS dark icon is transparent; iOS draws its own background behind it.
 
-## Not decided yet
+## Name
 
-- The app's final name. It lives in `src/config/app.ts` (`APP_NAME`) and `app.config.ts` (`NAME`).
-  The URL scheme and storage key stay `lineup-planner` so invite links and saved squads keep working.
+The app is called **Bench Logistics**, shown as **Bench Log** under the home-screen icon (`APP_NAME` and
+`APP_LABEL` in `src/config/app.ts`). The URL scheme and storage key stay `lineup-planner` so invite links and
+saved squads keep working.

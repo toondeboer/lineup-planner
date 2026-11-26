@@ -5,17 +5,29 @@ import type { ExpoConfig } from 'expo/config';
  *
  * Expo's config loader cannot import the app's TypeScript modules, so the few values shared with
  * the app are repeated here. `src/design/tokens/appConfig.test.ts` fails when they drift from
- * src/config/app.ts (name) and the design tokens (colours). The icon PNGs in assets/ are generated
+ * src/config/app.ts (names) and the design tokens (colours). The icon PNGs in assets/ are generated
  * from the same tokens with `npm run icons`.
  */
-export const NAME = 'Lineup Planner'; // APP_NAME
+export const NAME = 'Bench Logistics'; // APP_NAME: stores, browser tab, in-app copy
+export const LABEL = 'Bench Log'; // APP_LABEL: under the home-screen icon
 export const BRAND_GREEN = '#17693A'; // green[700], action.primary.bg (light)
 export const CANVAS_LIGHT = '#F5F7F5'; // grey[25], bg.canvas (light)
 export const CANVAS_DARK = '#0E1411'; // grey[900], bg.canvas (dark)
 
+/**
+ * The iOS bundle identifier and Android package. Permanent once the app is in a store.
+ * Development builds (eas.json profiles with APP_VARIANT=development) get a `.dev` suffix and their
+ * own label, so they can be installed next to the store version.
+ */
+export const APP_ID = 'com.toondeboer.benchlogistics';
+const IS_DEV = process.env.APP_VARIANT === 'development';
+const appId = IS_DEV ? `${APP_ID}.dev` : APP_ID;
+
 const config: ExpoConfig = {
-  name: NAME,
-  slug: 'lineup-planner',
+  // `name` is the label under the home-screen icon. The App Store and Play Store listing names are
+  // set in App Store Connect and the Play Console: use NAME there.
+  name: IS_DEV ? `${LABEL} Dev` : LABEL,
+  slug: 'bench-logistics',
   version: '1.0.0',
   orientation: 'portrait',
   icon: './assets/icon.png',
@@ -23,6 +35,7 @@ const config: ExpoConfig = {
   userInterfaceStyle: 'automatic',
   backgroundColor: CANVAS_LIGHT,
   ios: {
+    bundleIdentifier: appId,
     supportsTablet: true,
     icon: {
       light: './assets/icon.png',
@@ -31,6 +44,7 @@ const config: ExpoConfig = {
     },
   },
   android: {
+    package: appId,
     adaptiveIcon: {
       backgroundColor: BRAND_GREEN,
       foregroundImage: './assets/android-icon-foreground.png',
@@ -43,6 +57,7 @@ const config: ExpoConfig = {
     output: 'single',
     favicon: './assets/favicon.png',
     name: NAME,
+    shortName: LABEL,
     themeColor: BRAND_GREEN,
     backgroundColor: CANVAS_LIGHT,
   },

@@ -224,3 +224,18 @@ npm run dev   # start the dev server, then open the installed "Bench Log Dev" ap
 
 Rebuild only after a native change (new native package, app config, SDK upgrade); JavaScript changes load
 from the dev server.
+
+Sharing settings: each profile names its EAS environment (`development`, `preview`, `production`).
+`npm run dev` reads `EXPO_PUBLIC_API_URL` and `EXPO_PUBLIC_WEB_URL` from your local `.env`; preview and
+production builds embed the JavaScript, so they read both from that EAS environment instead. Set them once
+(the values end up in the app, so plaintext is right):
+
+```bash
+npx eas-cli@latest env:set --name EXPO_PUBLIC_API_URL --value <ApiUrl> --visibility plaintext \
+  --environment production --environment preview --environment development
+npx eas-cli@latest env:set --name EXPO_PUBLIC_WEB_URL --value <web app URL> --visibility plaintext \
+  --environment production --environment preview --environment development
+npx eas-cli@latest env:list production   # check
+```
+
+Without them a build is local-only and hides sharing.

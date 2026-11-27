@@ -48,6 +48,11 @@ const config: ExpoConfig = {
       dark: './assets/icon-dark.png',
       tinted: './assets/icon-tinted.png',
     },
+    config: {
+      // Export compliance: the app has no encryption of its own, only HTTPS through the system, which Apple
+      // exempts. Without this every upload waits on the compliance question in App Store Connect.
+      usesNonExemptEncryption: false,
+    },
   },
   android: {
     package: appId,

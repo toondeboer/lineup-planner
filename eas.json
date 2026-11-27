@@ -22,5 +22,10 @@
       "autoIncrement": true,
       "environment": "production"
     }
+  },
+  "submit": {
+    "production": {
+      "ios": { "appName": "Bench Logistics" }
+    }
   }
 }
